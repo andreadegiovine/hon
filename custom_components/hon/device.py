@@ -73,6 +73,20 @@ class HonDevice(CoordinatorEntity):
         except (KeyError, IndexError):
             return None
 
+    def is_on(self):
+        last_event_online = True
+        if ("lastConnEvent" in self._attributes and "category" in self._attributes["lastConnEvent"]):
+            last_event_online = self._attributes["lastConnEvent"]["category"] != "DISCONNECTED"
+        return self.get("remoteCtrValid") == "1" and last_event_online
+
+    def is_available(self):
+        return self.is_on()
+
+    def is_running(self):
+        if self.has("machMode"):
+            return self.get("machMode") in ["2","3","4","5"]
+        return None
+
     async def load_context(self):
         data = await self._hon.async_get_context(self)
         self._attributes = data

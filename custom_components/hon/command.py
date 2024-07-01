@@ -84,3 +84,12 @@ class HonCommand:
             example += f"\'{key}\':\'{parameter.default}\',"
         example = example[:-1] + "}"
         return text, example
+
+    def get_default_parameters(self):
+        data = "{"
+        for key, parameter in self._parameters.items():
+            if isinstance(parameter, HonParameterFixed) or key == "program":
+                continue
+            data += f"\"{key}\":\"{parameter.default}\","
+        data = data[:-1] + "}"
+        return data

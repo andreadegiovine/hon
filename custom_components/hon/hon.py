@@ -206,6 +206,9 @@ class HonConnection:
 
             ''' Remove appliances with no applianceTypeId'''
             self._appliances = [appliance for appliance in self._appliances if "applianceTypeId" in appliance]
+
+            ''' Remove not WM or TD appliances'''
+            self._appliances = [appliance for appliance in self._appliances if appliance["applianceTypeName"] in ['WM','TD']]
     
         self._start_time = time.time()
         return True
@@ -317,6 +320,7 @@ class HonConnection:
             "commandName": command,
             "transactionId": f"{device.mac_address}_{now[:-3]}Z",
             "applianceOptions": device.commands_options,
+            "programName": "PROGRAMS." + device.appliance_type + "." + parameters["program"].upper(),
             "device": {
                 "mobileId": self._mobile_id,
                 "mobileOs": OS,

@@ -1,143 +1,111 @@
 import logging
+from datetime import UTC, datetime, timedelta, timezone
+import pytz
 import asyncio
-import json
-from datetime import datetime, timedelta, timezone
-from dateutil.tz import gettz
-from typing import Optional
-from enum import IntEnum
+
+from homeassistant.components.binary_sensor import ( BinarySensorEntity, BinarySensorEntityDescription )
+from homeassistant.helpers import translation
 
 from .const import DOMAIN, APPLIANCE_TYPE
-from .base import HonBaseCoordinator, HonBaseBinarySensorEntity
-
-from homeassistant.core import callback
-from homeassistant.helpers import entity_platform
-from homeassistant.config_entries import ConfigEntry
-
-from homeassistant.components.binary_sensor import (
-    BinarySensorEntity,
-    BinarySensorDeviceClass,
-)
+from .base import HonBaseDevice
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_entry(hass, entry: ConfigEntry, async_add_entities) -> None:
+default_values = {
+    "wm" : {
+        "icon" : "mdi:washing-machine",
+    },
+    "td" : {
+        "icon" : "mdi:tumble-dryer",
+    },
+}
 
+async def async_setup_entry(hass, entry, async_add_entities) -> None:
     hon = hass.data[DOMAIN][entry.unique_id]
-
     appliances = []
+
     for appliance in hon.appliances:
 
         coordinator = await hon.async_get_coordinator(appliance)
-        device = coordinator.device
+        translations = await translation.async_get_translations(hass, hass.config.language, "entity")
 
-        # Every device should have a OnOff status
-        appliances.extend([HonBaseOnOff(hass, coordinator, entry, appliance)])
+        default_value = default_values.get(coordinator.device.appliance_type.lower(), {})
 
-        if device.has("doorStatusZ1"):
-            appliances.extend([HonBaseDoorStatus(hass, coordinator, entry, appliance, "Z1", "zone 1")])
-        if device.has("doorStatusZ2"):
-            appliances.extend([HonBaseDoorStatus(hass, coordinator, entry, appliance, "Z2", "zone 2")])
-        if device.has("doorLockStatus"):
-            appliances.extend([HonBaseDoorLockStatus(hass, coordinator, entry, appliance)])
+        description = BinarySensorEntityDescription(
+            key=coordinator.device.appliance_type.lower(),
+            name=None,
+            translation_key = coordinator.device.appliance_type.lower(),
+            icon=default_value.get("icon", None),
+        )
+        appliances.extend([HonDevice(coordinator, appliance, description, translations)])
 
-        if device.has("door2StatusZ1"):
-            appliances.extend([HonBaseDoor2Status(hass, coordinator, entry, appliance, "Z1", "zone 1")])
-        if device.has("door2StatusZ2"):
-            appliances.extend([HonBaseDoor2Status(hass, coordinator, entry, appliance, "Z2", "zone 2")])
-
-        if device.has("lockStatus"):
-            appliances.extend([HonBaseChildLockStatus(hass, coordinator, entry, appliance)])
-        if device.has("lightStatus"):
-            appliances.extend([HonBaseLightStatus(hass, coordinator, entry, appliance)])
-        if device.has("remoteCtrValid"):
-            appliances.extend([HonBaseRemoteControl(hass, coordinator, entry, appliance)])
-        if device.has("preheatStatus"):
-            appliances.extend([HonBasePreheating(hass, coordinator, entry, appliance)])
-        if device.has("healthMode"):
-            appliances.extend([HonBaseHealthMode(hass, coordinator, entry, appliance)])
+        await coordinator.async_request_refresh()
 
     async_add_entities(appliances)
 
 
-
-
-class HonBaseOnOff(HonBaseBinarySensorEntity):
-    def __init__(self, hass, coordinator, entry, appliance) -> None:
-        super().__init__(coordinator, appliance, "onOffStatus", "Status")
-
-        self._attr_device_class = BinarySensorDeviceClass.POWER
-
+class HonDevice(HonBaseDevice):
     def coordinator_update(self):
+        self._attr_is_on = self._device.is_on()
+
+        if self._attr_is_on == False:
+            return
+
+        attributes = {}
+
+        if self._device.has("machMode"):
+            attributes["mode"] = self._device.get("machMode")
+
         if self._device.has("onOffStatus"):
-            self._attr_is_on = self._device.get("onOffStatus") == "1"
-        else:
-            self._attr_is_on = self._device.get("attributes.lastConnEvent.category") == "CONNECTED"
+            attributes["status"] = self._device.get("onOffStatus")
 
-class HonBaseDoorStatus(HonBaseBinarySensorEntity):
-    def __init__(self, hass, coordinator, entry, appliance, zone, zone_name) -> None:
-        super().__init__(coordinator, appliance, "doorStatus" + zone, f"Door status {zone_name}")
+        for key in ["error","errors"]:
+            if self._device.has(key):
+                if self._device.get(key) != "00":
+                    attributes["error"] = self._device.get(key)
 
-        self._attr_device_class = BinarySensorDeviceClass.DOOR
+        if self._device.has("temp"):
+            if self._device.is_running():
+                attributes["temperature"] = str(self._device.get("temp")) + " °C"
 
-class HonBaseDoor2Status(HonBaseBinarySensorEntity):
-    def __init__(self, hass, coordinator, entry, appliance, zone, zone_name) -> None:
-        super().__init__(coordinator, appliance, "door2Status" + zone, f"Door 2 status {zone_name}")
+        if self._device.has("dryLevel"):
+            if self._device.is_running():
+                attributes["dry_level"] = self._device.get("dryLevel")
 
-        self._attr_device_class = BinarySensorDeviceClass.DOOR
+        if self._device.has("prCode"):
+            if self._device.is_running():
+                translation_path = f"component.hon.entity.select.{self._coordinator.device.appliance_type.lower()}_program.state.{self._device.getProgramName()}"
+                attributes["program_name"] = self._translations.get(translation_path, self._device.getProgramName())
 
+        if self._device.has("prPhase"):
+            if self._device.is_running():
+                attributes["program_phase"] = self._device.get("prPhase")
 
-class HonBaseLightStatus(HonBaseBinarySensorEntity):
-    def __init__(self, hass, coordinator, entry, appliance) -> None:
-        super().__init__(coordinator, appliance, "lightStatus", "Light")
+        if self._device.has("spinSpeed"):
+            if self._device.is_running():
+                attributes["spin_speed"] = str(self._device.get("spinSpeed")) + " rpm"
 
-        self._attr_device_class = BinarySensorDeviceClass.LIGHT
-        self._attr_icon = "mdi:lightbulb"
+        if self._device.has("remainingTimeMM"):
+            if self._device.is_running():
+                delay = self._device.getInt("delayTime")
+                remaining = self._device.getInt("remainingTimeMM")
+                value = None
+                if remaining > 0:
+                    value = datetime.now(timezone.utc).replace(second=0) + timedelta(minutes=delay + remaining)
 
-        self._attr_supported_attributes = ["SET_LIGHT"]
+                    if remaining//60 > 0:
+                        remaining = str(remaining//60) + ":" + str(remaining%60)
+                    else:
+                        remaining = str(remaining) + " min"
+                else:
+                    remaining: None
 
-    @property
-    def supported_attributes(self) -> set[str] | None:
-        return self._attr_supported_attributes
+                attributes["remaining_time"] = remaining
 
-class HonBaseRemoteControl(HonBaseBinarySensorEntity):
-    def __init__(self, hass, coordinator, entry, appliance) -> None:
-        super().__init__(coordinator, appliance, "remoteCtrValid", "Remote control")
+                if (not value in [0, None]) and value.tzinfo != UTC:
+                    value = value.astimezone(UTC)
 
-        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
-        self._attr_icon = "mdi:remote"
+                value = value.astimezone(pytz.timezone('Europe/Rome'))
+                attributes["end_time"] = value.strftime("%H:%M")
 
-
-class HonBaseDoorLockStatus(HonBaseBinarySensorEntity):
-    def __init__(self, hass, coordinator, entry, appliance) -> None:
-        super().__init__(coordinator, appliance, "doorLockStatus", "Door lock")
-
-        self._attr_device_class = BinarySensorDeviceClass.LOCK
-
-    def coordinator_update(self):
-        self._attr_is_on = self._device.get("doorLockStatus") == "0"
-
-
-class HonBaseChildLockStatus(HonBaseBinarySensorEntity):
-    def __init__(self, hass, coordinator, entry, appliance) -> None:
-        super().__init__(coordinator, appliance, "lockStatus", "Child lock")
-
-        translation_key = "lockStatus"
-        self._attr_device_class = BinarySensorDeviceClass.LOCK
-
-    def coordinator_update(self):
-        self._attr_is_on = self._device.get("lockStatus") == "0"
-
-class HonBasePreheating(HonBaseBinarySensorEntity):
-    def __init__(self, hass, coordinator, entry, appliance) -> None:
-        super().__init__(coordinator, appliance, "preheatStatus", "Preheating")
-
-        self._attr_device_class = BinarySensorDeviceClass.HEAT
-        self._attr_icon = "mdi:thermometer-chevron-up"
-
-
-class HonBaseHealthMode(HonBaseBinarySensorEntity):
-    def __init__(self, hass, coordinator, entry, appliance) -> None:
-        super().__init__(coordinator, appliance, "healthMode", "Health mode")
-
-        self._attr_device_class = BinarySensorDeviceClass.RUNNING
-        self._attr_icon = "mdi:doctor"
+        self._attr_extra_state_attributes = attributes

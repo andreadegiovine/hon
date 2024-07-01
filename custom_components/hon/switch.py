@@ -106,14 +106,16 @@ class HonSwitch(HonBaseSwitch):
         if type(setting) == HonParameter:
             return
         setting.value = "1"
-        await self.coordinator.async_request_refresh()
+#         await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         setting = self._device.settings[self.entity_description.key]
         if type(setting) == HonParameter:
             return
         setting.value = "0"
-        await self.coordinator.async_request_refresh()
+#         await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh()
 
 
 class HonDelaySwitch(HonBaseSwitch):

@@ -72,7 +72,8 @@ class HonNumber(HonBaseNumber):
 
     async def async_set_native_value(self, value: float) -> None:
         self._device.settings[self.entity_description.key].value = value
-        await self.coordinator.async_request_refresh()
+#         await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh()
 
     def coordinator_update(self):
         setting = self._device.settings[self.entity_description.key]

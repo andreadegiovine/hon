@@ -142,8 +142,8 @@ class HonBaseButton(HonBaseEntity, ButtonEntity):
     def __init__(self, coordinator, appliance, description, hass):
         super().__init__(coordinator, appliance, description)
         self._hass                   = hass
-        self.auto_detergent_notified = False
-        self.auto_softener_notified  = False
+#         self.auto_detergent_notified = False
+#         self.auto_softener_notified  = False
 
     async def async_press(self):
         """Press on button action"""

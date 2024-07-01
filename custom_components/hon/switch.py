@@ -93,7 +93,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 class HonSwitch(HonBaseSwitch):
     @property
     def available(self) -> bool:
-        return not isinstance(self._device.settings[self.entity_description.key], HonParameterFixed) and self._device.is_available() and (not self._device.is_running())
+        return self.entity_description.key in self._device.settings and (not isinstance(self._device.settings[self.entity_description.key], HonParameterFixed)) and self._device.is_available() and (not self._device.is_running())
 
     @property
     def is_on(self) -> bool | None:

@@ -53,7 +53,7 @@ class HonDevice(HonBaseDevice):
 
         attributes = {}
 
-        if self._device.has("machMode"):
+        if self._device.has("machMode") and self._device.is_on():
             attributes["mode"] = self._device.get("machMode")
 
         if self._device.has("onOffStatus"):

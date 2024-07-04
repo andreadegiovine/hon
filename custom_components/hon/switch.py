@@ -98,6 +98,9 @@ class HonSwitch(HonBaseSwitch):
     @property
     def is_on(self) -> bool | None:
         """Return True if entity is on."""
+        if not self.entity_description.key in self._device.settings:
+            return False
+
         setting = self._device.settings[self.entity_description.key]
         return int(setting.value) == 1
 
@@ -138,11 +141,11 @@ class HonDelaySwitch(HonBaseSwitch):
 
         setting = self._device.settings["startProgram.delayTime"]
         setting.value = str(delay)
-
 #         await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         setting = self._device.settings["startProgram.delayTime"]
         setting.value = "0"
-
 #         await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh()

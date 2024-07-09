@@ -73,6 +73,11 @@ class HonDevice(CoordinatorEntity):
         except (KeyError, IndexError):
             return None
 
+    def set_data(self, data):
+        for key in data:
+            self._attributes.setdefault("parameters", {})[key] = data[key]
+            self._coordinator.async_update_listeners()
+
     def is_on(self):
         last_event_online = True
         if ("lastConnEvent" in self._attributes and "category" in self._attributes["lastConnEvent"]):

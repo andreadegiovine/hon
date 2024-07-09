@@ -78,6 +78,10 @@ class HonStartProgramButton(HonBaseButton):
 
         await self._device.start_command(program, parameters).send()
 #         await self._coordinator.async_request_refresh()
+        new_mode = "2"
+        if "startProgram.delayTime" in device_settings and int(device_settings["startProgram.delayTime"].value) > 0:
+            new_mode = "4"
+        self._device.set_data({"machMode": new_mode})
         await self._device.load_context()
 
 
@@ -91,6 +95,7 @@ class HonStopProgramButton(HonBaseButton):
         parameters = {"onOffStatus": "0", "machMode": "1" }
         await self._coordinator.async_set(parameters)
 #         await self._coordinator.async_request_refresh()
+        self._device.set_data({"machMode": "1"})
         await self._device.load_context()
 
 
@@ -108,4 +113,5 @@ class HonPauseProgramButton(HonBaseButton):
         parameters = {"onOffStatus": "1", "machMode": new_mode }
         await self._coordinator.async_set(parameters)
 #         await self._coordinator.async_request_refresh()
+        self._device.set_data({"machMode": new_mode})
         await self._device.load_context()

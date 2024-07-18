@@ -90,10 +90,10 @@ SENSORS_DEFAULT = {
 
 AUTH_API        = "https://account2.hon-smarthome.com/SmartHome"
 API_URL         = "https://api-iot.he.services"
-APP_VERSION     = "2.0.10"
-OS_VERSION      = 31
-OS              = "android"
-DEVICE_MODEL    = "exynos9820"
+APP_VERSION     = "2.10.6"
+OS_VERSION      = "15.7.1"
+OS              = "ios"
+DEVICE_MODEL    = "iphonexs"
 
 class APPLIANCE_TYPE(IntEnum):
     WASHING_MACHINE = 1,

@@ -16,7 +16,11 @@ from .const import (
     CONF_COGNITO_TOKEN,
     CONF_REFRESH_TOKEN,
     AUTH_API,
-    API_URL
+    API_URL,
+    DEVICE_MODEL,
+    APP_VERSION,
+    OS,
+    OS_VERSION
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -159,11 +163,11 @@ class HonConnection:
 
         post_headers = {"id-token": self._id_token}
         data = {
-           "os": 1234,
-           "osVersion": 1234,
-           "appVersion": 1234,
-           "deviceModel": 1234,
-           "mobileId": 1234
+           "os": OS,
+           "osVersion": OS_VERSION,
+           "appVersion": APP_VERSION,
+           "deviceModel": DEVICE_MODEL,
+           "mobileId": self._mobile_id
        }
 
         async with self._session.post(f"{API_URL}/auth/v1/login", headers=post_headers, json=data) as resp:
@@ -208,8 +212,8 @@ class HonConnection:
             "firmwareId": appliance["eepromId"],
             "macAddress": appliance["macAddress"],
             "fwVersion": appliance["fwVersion"],
-            "os": 1234,
-            "appVersion": 1234,
+            "os": OS,
+            "appVersion": APP_VERSION,
             "series": appliance["series"],
         }
         url = f"{API_URL}/commands/v1/retrieve"
@@ -248,11 +252,11 @@ class HonConnection:
                "origin": "standardProgram"
            },
            "device": {
-               "mobileOs": 1234,
-               "osVersion": 1234,
-               "appVersion": 1234,
-               "deviceModel": 1234,
-               "mobileId": 1234
+               "mobileOs": OS,
+               "osVersion": OS_VERSION,
+               "appVersion": APP_VERSION,
+               "deviceModel": DEVICE_MODEL,
+               "mobileId": self._mobile_id
            },
            "ancillaryParameters": {},
            "applianceOptions": {},

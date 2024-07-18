@@ -4,7 +4,7 @@ import secrets
 import json
 import re
 import time
-from urllib.parse import quote
+from urllib import parse
 from datetime import datetime
 
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
@@ -80,11 +80,11 @@ class HonConnection:
 
         data = (
             "message=%7B%22actions%22%3A%5B%7B%22id%22%3A%2279%3Ba%22%2C%22descriptor%22%3A%22apex%3A%2F%2FLightningLoginCustomController%2FACTION%24login%22%2C%22callingDescriptor%22%3A%22markup%3A%2F%2Fc%3AloginForm%22%2C%22params%22%3A%7B%22username%22%3A%22"
-            + urllib.parse.quote(self._email)
+            + parse.quote(self._email)
             + "%22%2C%22password%22%3A%22"
-            + urllib.parse.quote(self._password)
+            + parse.quote(self._password)
             + "%22%2C%22startUrl%22%3A%22%22%7D%7D%5D%7D&aura.context=%7B%22mode%22%3A%22PROD%22%2C%22fwuid%22%3A%22"
-            + urllib.parse.quote(self._framework)
+            + parse.quote(self._framework)
             + "%22%2C%22app%22%3A%22siteforce%3AloginApp2%22%2C%22loaded%22%3A%7B%22APPLICATION%40markup%3A%2F%2Fsiteforce%3AloginApp2%22%3A%22YtNc5oyHTOvavSB9Q4rtag%22%7D%2C%22dn%22%3A%5B%5D%2C%22globals%22%3A%7B%7D%2C%22uad%22%3Afalse%7D&aura.pageURI=%2FSmartHome%2Fs%2Flogin%2F%3Flanguage%3Dfr&aura.token=null"
         )
 
@@ -151,7 +151,7 @@ class HonConnection:
                         _LOGGER.error("Unable to get [id_token] during authorization process (tried both options). Full response [" + text + "]")
                         return False
                 else:
-                    params = urllib.parse.parse_qs(array[1])
+                    params = parse.parse_qs(array[1])
                     self._id_token = params["id_token"][0]
             except:
                 _LOGGER.error("Unable to get [id_token] during authorization process. Full response [" + text + "]")
@@ -159,7 +159,7 @@ class HonConnection:
 
         post_headers = {"id-token": self._id_token}
         data = {
-           "mobileOs": 1234,
+           "os": 1234,
            "osVersion": 1234,
            "appVersion": 1234,
            "deviceModel": 1234,

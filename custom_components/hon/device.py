@@ -70,6 +70,9 @@ class HonDevice(CoordinatorEntity):
     async def get_programs(self):
         commands = await self._hon.get_programs(self._appliance)
 
+        if not "startProgram" in commands:
+            return
+
         for program in commands["startProgram"]:
             program_attr = commands["startProgram"][program]
             program_name = program.split(".")[-1].lower()

@@ -2,13 +2,11 @@ import logging
 import re
 from typing import Any
 from datetime import timedelta
-import time
 
-from homeassistant.helpers.update_coordinator import ( DataUpdateCoordinator, CoordinatorEntity, REQUEST_REFRESH_DEFAULT_COOLDOWN )
+from homeassistant.helpers.update_coordinator import ( DataUpdateCoordinator, CoordinatorEntity )
 from homeassistant.core import callback
 from homeassistant.components.select import SelectEntity
 from homeassistant.components.button import ButtonEntity
-from homeassistant.components.number import NumberEntity
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.components.binary_sensor import BinarySensorEntity
 
@@ -42,7 +40,7 @@ class HonBaseCoordinator(DataUpdateCoordinator):
 
 
     async def _async_update_data(self):
-        await self._device.load_context()
+        await self._device.get_context()
 
     @property
     def device(self):
@@ -125,6 +123,10 @@ class HonBaseSensor(HonBaseEntity):
         """First update"""
         self.coordinator_update()
 
+    @property
+    def available(self) -> bool:
+        return (self.entity_description.key in self._device._settings) and self._device.is_available and (not self._device.is_running)
+
     @callback
     def _handle_coordinator_update(self):
         if self._coordinator.data is False:
@@ -137,60 +139,58 @@ class HonBaseSensor(HonBaseEntity):
         raise NotImplementedError
 
 
-
 class HonBaseButton(HonBaseEntity, ButtonEntity):
     def __init__(self, coordinator, appliance, description, hass):
         super().__init__(coordinator, appliance, description)
-        self._hass                   = hass
-#         self.auto_detergent_notified = False
-#         self.auto_softener_notified  = False
+        self._hass = hass
 
-    async def async_press(self):
-        """Press on button action"""
-        raise NotImplementedError
-
-class HonBaseSelect(HonBaseSensor, SelectEntity):
-    @property
-    def current_option(self):
-        """Press on button action"""
-        raise NotImplementedError
-
-    async def async_select_option(self, option: str):
-        """Press on button action"""
-        raise NotImplementedError
-
-class HonBaseNumber(HonBaseSensor, NumberEntity):
-    @property
-    def native_value(self):
-        """Press on button action"""
-        raise NotImplementedError
-
-    async def async_set_native_value(self, value: float):
-        """Press on button action"""
-        raise NotImplementedError
 
 class HonBaseSwitch(HonBaseSensor, SwitchEntity):
     @property
     def is_on(self):
-        """Press on button action"""
-        raise NotImplementedError
+        return self.available and self._device._settings[self.entity_description.key]["value"] == 1
 
     async def async_turn_on(self, **kwargs: Any):
-        """Press on button action"""
-        raise NotImplementedError
+        self._device._settings[self.entity_description.key]["value"] = 1
+        await self.coordinator.async_refresh()
 
     async def async_turn_off(self, **kwargs: Any):
-        """Press on button action"""
-        raise NotImplementedError
+        self._device._settings[self.entity_description.key]["value"] = 0
 
     def coordinator_update(self):
-        self._attr_is_on = self.is_on
+        if not self.available:
+            self._attr_is_on = False
+        else:
+            self._attr_is_on = self._device._settings[self.entity_description.key]["value"] == 1
+
+
+class HonBaseSelect(HonBaseSensor, SelectEntity):
+    @property
+    def available(self) -> bool:
+        return super().available and "options" in self._device._settings[self.entity_description.key] and len(self._device._settings[self.entity_description.key]["options"]) > 0
+
+    @property
+    def current_option(self) -> str | None:
+        if not self.available:
+            return None
+        return str(self._device._settings[self.entity_description.key]["value"])
+
+    async def async_select_option(self, option: str) -> None:
+        self._device._settings[self.entity_description.key]["value"] = str(option)
+
+    def coordinator_update(self):
+        if not self.available:
+            self._attr_options = []
+            self._attr_current_option = None
+        else:
+            self._attr_options = self._device._settings[self.entity_description.key]["options"]
+            self._attr_current_option = str(self._device._settings[self.entity_description.key]["value"])
 
 
 class HonBaseDevice(HonBaseEntity, BinarySensorEntity):
     def __init__(self, coordinator, appliance, description, translations):
         super().__init__(coordinator, appliance, description)
-        self._translations           = translations
+        self._translations = translations
 
         """First update"""
         self.coordinator_update()

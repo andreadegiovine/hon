@@ -15,44 +15,58 @@
   },
   "entity": {
     "switch": {
-      "autosoftenerstatus": {
+      "wm_autosoftenerstatus": {
         "name": "Ammorbidente auto"
       },
-      "autodetergentstatus": {
+      "wm_autodetergentstatus": {
         "name": "Detersivo auto"
       },
-      "extrarinse1": {
+      "wm_extrarinse1": {
         "name": "+1 risciacquo"
       },
-      "extrarinse2": {
+      "wm_extrarinse2": {
         "name": "+2 risciacqui"
       },
-      "extrarinse3": {
+      "wm_extrarinse3": {
         "name": "+3 risciacqui"
       },
-      "anticrease": {
+      "wm_anticrease": {
         "name": "Anti piega"
       },
-      "hygiene": {
+      "wm_hygiene": {
         "name": "Igiene"
       },
-      "goodnight": {
+      "wm_goodnight": {
         "name": "Buonanotte"
       },
-      "prewash": {
+      "wm_prewash": {
         "name": "Prelavaggio"
       },
-      "acquaplus": {
+      "wm_acquaplus": {
         "name": "Acqua+"
       },
-      "delayswitch": {
+      "wm_delay": {
         "name": "Avvio programmato (9:00)"
       },
-      "bestironing": {
+      "wm_steamlevel": {
+        "name": "Livello vapore"
+      },
+      "td_delay": {
+        "name": "Avvio programmato (9:00)"
+      },
+      "td_bestironing": {
         "name": "Stiratura facile"
       },
-      "steamlevel": {
-        "name": "Vapore"
+      "td_anticrease": {
+        "name": "Anti piega"
+      }
+    },
+    "number": {
+      "wm_dirtylevel": {
+        "name": "Livello di sporco"
+      },
+      "td_drylevel": {
+        "name": "Livello asciugatura"
       }
     },
     "button": {
@@ -67,39 +81,11 @@
       }
     },
     "select": {
-      "temp": {
+      "wm_temp": {
         "name": "Temperatura"
       },
-      "spinspeed": {
+      "wm_spinspeed": {
         "name": "Centrifuga"
-      },
-      "dirtylevel": {
-        "name": "Livello sporco",
-        "state": {
-          "1": "Basso",
-          "2": "Normale",
-          "3": "Alto"
-        }
-      },
-      "lang": {
-        "name": "Lingua"
-      },
-      "waterhard": {
-        "name": "Durezza acqua"
-      },
-      "drylevel": {
-        "name": "Livello asciugatura",
-        "state": {
-          "1": "Nessuna asciugatura",
-          "2": "Stiro facile",
-          "3": "Appendere",
-          "4": "Armadio",
-          "5": "Extra asciutto",
-          "6": "Pronto da indossare"
-        }
-      },
-      "drytime": {
-        "name": "Durata asciugatura"
       },
       "wm_program": {
         "name": "Programma",
@@ -570,7 +556,7 @@
       }
     },
     "binary_sensor": {
-      "device": {
+      "wm": {
         "state_attributes": {
           "mode": {
             "name": "Stato",
@@ -608,6 +594,36 @@
           "program_name": {
             "name": "Programma"
           },
+          "program_phase": {
+            "name": "Fase",
+            "state": {
+              "0": "Pronta",
+              "1": "Lavaggio",
+              "2": "Lavaggio",
+              "3": "Centrifuga",
+              "4": "Risciacqui",
+              "5": "Risciacqui",
+              "6": "Risciacqui",
+              "7": "Asciugatura",
+              "8": "Asciugatura",
+              "9": "Vapore",
+              "10": "Pronta",
+              "11": "Centrifuga",
+              "12": "Pesatura",
+              "13": "Pesatura",
+              "14": "Lavaggio",
+              "15": "Lavaggio",
+              "16": "Lavaggio",
+              "17": "Risciacqui",
+              "18": "Risciacqui",
+              "19": "Pianificato",
+              "20": "Mantieni fresco",
+              "24": "Rinfresca",
+              "25": "Lavaggio",
+              "26": "Riscaldamento",
+              "27": "Lavaggio"
+            }
+          },
           "spin_speed": {
             "name": "Centrifuga"
           },
@@ -622,37 +638,75 @@
           }
         }
       },
-      "wm": {
-        "state_attributes": {
-          "program_phase": {
-            "name": "Fase",
-            "state": {
-              "0": "Pronta",
-              "1": "Lavaggio",
-              "3": "Centrifuga",
-              "4": "Risciacqui",
-              "7": "Asciugatura",
-              "9": "Vapore",
-              "12": "Pesatura",
-              "19": "Pianificato",
-              "20": "Mantieni fresco",
-              "24": "Rinfresca",
-              "26": "Riscaldamento"
-            }
-          }
-        }
-      },
       "td": {
         "state_attributes":{
+          "mode": {
+            "name": "Stato",
+            "state": {
+              "0": "Disconnesso",
+              "1": "Pronta",
+              "2": "Programma in esecuzione",
+              "3": "Pausa",
+              "4": "Pianificato",
+              "5": "Pianificato",
+              "6": "Errore",
+              "7": "Terminato",
+              "8": "Test",
+              "9": "Arresto il ciclo..."
+            }
+          },
+          "dry_level" : {
+            "name": "Asciugatura",
+            "state": {
+              "0": "Nessuna asciugatura",
+              "1": "Stiro facile",
+              "2": "Appendere",
+              "3": "Armadio",
+              "4": "Extra asciutto",
+              "11": "Nessuna asciugatura",
+              "12": "Stiro facile",
+              "13": "Armadio",
+              "14": "Pronto da indossare",
+              "15": "Extra asciutto"
+            }
+          },
+          "temperature": {
+            "name": "Temperatura"
+          },
+          "program_name": {
+            "name": "Programma"
+          },
           "program_phase": {
             "name": "Fase",
             "state": {
               "0": "Pronta",
               "1": "Asciugatura",
+              "2": "Asciugatura",
               "3": "Raffreddamento",
               "8": "Sconosciuto",
-              "18": "Mantieni fresco"
+              "11": "Pronta",
+              "12": "Sconosciuto",
+              "13": "Raffreddamento",
+              "14": "Asciugatura",
+              "15": "Asciugatura",
+              "16": "Raffreddamento",
+              "17": "Sconosciuto",
+              "18": "Mantieni fresco",
+              "19": "Asciugatura",
+              "20": "Asciugatura"
             }
+          },
+          "spin_speed": {
+            "name": "Centrifuga"
+          },
+          "remaining_time": {
+            "name": "Rimanente"
+          },
+          "end_time": {
+            "name": "Fine"
+          },
+          "error": {
+            "name": "Errore"
           }
         }
       }

@@ -6,7 +6,6 @@ from .hon import HonConnection
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
-from homeassistant.core import callback
 
 from .const import DOMAIN, CONF_ID_TOKEN, CONF_FRAMEWORK, CONF_COGNITO_TOKEN, CONF_REFRESH_TOKEN
 

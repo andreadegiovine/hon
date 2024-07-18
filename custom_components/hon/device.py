@@ -1,10 +1,8 @@
 import logging
 
-from homeassistant.helpers.update_coordinator import (DataUpdateCoordinator,CoordinatorEntity)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, APPLIANCE_DEFAULT_NAME
-from .command import HonCommand
-from .parameter import HonParameterFixed, HonParameterEnum
+from .const import APPLIANCE_DEFAULT_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,216 +23,149 @@ class HonDevice(CoordinatorEntity):
         self._model_id      = appliance["applianceModelId"]
         self._serial_number = appliance["serialNumber"]
         self._fw_version    = appliance["fwVersion"]
+        self._mac_address   = appliance["macAddress"]
 
-        self._commands              = {}
-        self._appliance_model       = {}
-        self._attributes            = {}
-        self._statistics            = {}
+        self._attributes = {}
+        self._programs = {}
+        self._program = None
+        self._settings = {}
 
+    @property
+    def sensors(self):
+        sensors = {"switch": [], "select": []}
+        for program_name in self._programs:
+            program_options = self._programs[program_name]
+            for option_name in program_options:
+                option = program_options[option_name]
+                if ("type" in option) and (not option_name in sensors[option["type"]]) and option_name != "lang":
+                    sensors[option["type"]].append(option_name)
+        return sensors
 
-    def __getitem__(self, item):
-        if "." in item:
-            result = self.data
-            for key in item.split("."):
-                if all([k in "0123456789" for k in key]) and type(result) is list:
-                    result = result[int(key)]
-                else:
-                    result = result[key]
-            return result
-        else:
-            if item in self.data:
-                return self.data[item]
-            if item in self.attributes["parameters"]:
-                return self.attributes["parameters"].get(item)
-            return self.appliance[item]
+    @property
+    def is_on(self):
+        last_event_online = True
+        if "lastConnEvent" in self._attributes:
+            last_event_online = self._attributes["lastConnEvent"] != "DISCONNECTED"
+        return self._attributes["remoteCtrValid"] == "1" and last_event_online
 
-    def get(self, item, default=None):
-        try:
-            return self[item]
-        except (KeyError, IndexError):
-            return default
-    
-    def getInt(self, item):
-        return int(self.get(item,0))
+    @property
+    def is_available(self):
+        return self.is_on
 
-    def getFloat(self, item):
-        return float(self.get(item,0))
+    @property
+    def is_running(self):
+        if "machMode" in self._attributes:
+            return self._attributes["machMode"] in ["2","3","4","5"]
+        return False
 
-    def has(self, item, default=None):
-        return self.get(item) != None
-
-    def getProgramName(self):
-        try:
-            name = self._attributes["commandHistory"]["command"]["programName"].lower()
-            parts = name.split('.')
-            if( len(parts) == 3 ):
-                name = parts[2]
-            return name
-        except (KeyError, IndexError):
-            return None
+    def set_program(self, program_name):
+        self._program = program_name
+        self._settings = self._programs[self._program]
 
     def set_data(self, data):
         for key in data:
-            self._attributes.setdefault("parameters", {})[key] = data[key]
+            self._attributes[key] = data[key]
             self._coordinator.async_update_listeners()
 
-    def is_on(self):
-        last_event_online = True
-        if ("lastConnEvent" in self._attributes and "category" in self._attributes["lastConnEvent"]):
-            last_event_online = self._attributes["lastConnEvent"]["category"] != "DISCONNECTED"
-        return self.get("remoteCtrValid") == "1" and last_event_online
+    async def get_programs(self):
+        commands = await self._hon.get_programs(self._appliance)
 
-    def is_available(self):
-        return self.is_on()
+        for program in commands["startProgram"]:
+            program_attr = commands["startProgram"][program]
+            program_name = program.split(".")[-1].lower()
 
-    def is_running(self):
-        if self.has("machMode"):
-            return self.get("machMode") in ["2","3","4","5"]
-        return None
+            program_params = {}
+            for param in program_attr["parameters"]:
+                param_attr = program_attr["parameters"][param]
 
-    async def load_context(self):
-        data = await self._hon.async_get_context(self)
-        self._attributes = data
-        for name, values in self._attributes.pop("shadow", {'NA': 0}).get("parameters").items():
-            self._attributes.setdefault("parameters", {})[name] = values["parNewVal"]
+                if param_attr["typology"] == "range" and ("maximumValue" in param_attr):
+                    if int(param_attr["minimumValue"]) == 0 and (int(param_attr["maximumValue"]) == 1 or int(param_attr["maximumValue"]) == int(param_attr["incrementValue"])):
+                        program_params[param] = {"type": "switch", "value": int(param_attr["defaultValue"])}
+                    else:
+                        options = list(range(int(param_attr["minimumValue"]), (int(param_attr["maximumValue"])+int(param_attr["incrementValue"])), int(param_attr["incrementValue"])))
+                        program_params[param] = {"type": "select", "value": int(param_attr["defaultValue"]), "options": list(map(str, options))}
+                elif param_attr["typology"] == "enum":
+                    program_params[param] = {"type": "select", "value": int(param_attr["defaultValue"]), "options": list(map(str, param_attr["enumValues"]))}
+                elif "mandatory" in param_attr and "fixedValue" in param_attr:
+                    program_params[param] = {"value": int(param_attr["fixedValue"])}
 
-    @property
-    def data(self):
-        return {"attributes": self.attributes, "appliance": self.appliance, "statistics": self.statistics, **self.parameters}
+            self._programs[program_name] = program_params
 
-    @property
-    def appliance_type(self):
-        return self._appliance.get("applianceTypeName")
+        self.set_program(list(self._programs)[0])
 
-    @property
-    def mac_address(self):
-        return self._appliance.get("macAddress")
+    async def get_context(self):
+        data = await self._hon.get_context(self)
 
-    @property
-    def model_name(self):
-        return self._appliance.get("modelName")
+        for name, values in data.pop("shadow", {'NA': 0}).get("parameters").items():
+            self._attributes[name] = values["parNewVal"]
 
-    @property
-    def name(self):
-        return self._name
+            if name == "prPhase":
+                if self._type_name.upper() == "WM":
+                    if self._attributes[name] in ["0","10"]: # Ready
+                        self._attributes[name] = "0"
+                    if self._attributes[name] in ["1","2","14","15","16","25","27"]: # Wash
+                        self._attributes[name] = "1"
+                    if self._attributes[name] in ["3","11"]: # Spin
+                        self._attributes[name] = "3"
+                    if self._attributes[name] in ["4","5","6","17","18"]: # Rinse
+                        self._attributes[name] = "4"
+                    if self._attributes[name] in ["7","8"]: # Drying
+                        self._attributes[name] = "7"
+                    if self._attributes[name] in ["12","13"]: # Weighing
+                        self._attributes[name] = "12"
+                if self._type_name.upper() == "TD":
+                    if self._attributes[name] in ["0","11"]: # Ready
+                        self._attributes[name] = "0"
+                    if self._attributes[name] in ["1","2","14","15","19","20"]: # Drying
+                        self._attributes[name] = "1"
+                    if self._attributes[name] in ["3","13","16"]: # Cooldown
+                        self._attributes[name] = "3"
+                    if self._attributes[name] in ["8","12","17"]: # Unknown
+                        self._attributes[name] = "8"
 
-    @property
-    def commands_options(self):
-        return self._appliance_model.get("options")
+        self._attributes["lastConnEvent"] = data["lastConnEvent"]["category"]
 
-    @property
-    def commands(self):
-        return self._commands
-    
-    @property
-    def attributes(self):
-        return self._attributes
+    async def send_start(self):
+        if (not self._program) or (not self._settings):
+            return
 
-    @property
-    def statistics(self):
-        return self._statistics
+        params = {}
 
-    @property
-    def appliance(self):
-        return self._appliance
+        for param in self._settings:
+            attrs = self._settings[param]
+            params[param] = str(attrs["value"])
 
-    @property
-    def settings(self):
-        result = {}
-        for name, command in self._commands.items():
-            for key, setting in command.settings.items():
-                result[f"{name}.{key}"] = setting
-        return result
+        result = await self._hon.send_command(self, "startProgram", params, self._program)
+        if result:
+            new_mode = "2"
+            if int(self._settings["delayTime"]["value"]) > 0:
+                new_mode = "4"
+            self.set_data({"machMode": new_mode})
 
-    @property
-    def parameters(self):
-        result = {}
-        for name, command in self._commands.items():
-            for key, parameter in command.parameters.items():
-                result.setdefault(name, {})[key] = parameter.value
-        return result
-        
 
-    def update_command(self, command, parameters):
-        for key in command.parameters.keys():
-            if( key in parameters 
-                and command.parameters.get(key).value != parameters.get(key) 
-                and not isinstance(command.parameters.get(key), HonParameterFixed)):
+    async def send_stop(self):
+        result = await self._hon.send_command(self, "stopProgram", {"onOffStatus": "0"})
+        if result:
+            self.set_data({"machMode": "1"})
 
-                if( isinstance(command.parameters.get(key), HonParameterEnum) and parameters.get(key) not in command.parameters.get(key).values): 
-                    _LOGGER.warning(f"Unable to update parameter [{key}] with value [{parameters.get(key)}] because not in range {command.parameters.get(key).values}. Use default instead.")
-                else:
-                    command.parameters.get(key).value = parameters.get(key)
 
-    def settings_command(self, parameters = {}):
-        if( "settings" not in self._commands ):
-            raise ValueError("No command to update settings of the device")
-        command = self._commands.get("settings")
-        self.update_command(command, self.attributes["parameters"])
-        self.update_command(command, parameters)
+    async def send_pause_resume(self):
+        mode = self._attributes["machMode"]
 
-        # Update for next command (in case no refresh happens yet)
-        for key in command.parameters.keys():
-            self.attributes["parameters"][key] = command.parameters.get(key).value
+        if mode not in ["2","3"]:
+            return
 
-        return command
+        pause = "1"
+        command = "pauseProgram"
+        new_mode = "3"
+        if mode == "3":
+            pause = "0"
+            command = "resumeProgram"
+            new_mode = "2"
 
-    def start_command(self, program = None, parameters = {}):
-        if( "startProgram" not in self._commands ):
-            raise ValueError("No command to start the device")
-        command = self._commands.get("startProgram")
-        command.set_program(program)
-        # Return the new default command
-        command = self._commands.get("startProgram")
-        self.update_command(command, self.attributes["parameters"])
-        self.update_command(command, parameters)
-    
-        # Update for next command (in case no refresh happens yet)
-        for key in command.parameters.keys():
-            self.attributes["parameters"][key] = command.parameters.get(key).value
+        result = await self._hon.send_command(self, command, {"pause": pause})
+        if result:
+            self.set_data({"machMode": new_mode})
 
-        return command
 
-    def stop_command(self, parameters = {}):
-        if( "stopProgram" in self._commands ):
-            command = self._commands.get("stopProgram")
-            self.update_command(command, self.attributes["parameters"])
-            self.update_command(command, parameters)
-            return command
-        raise ValueError("No command to stop the device")
 
-    async def load_commands(self):
-        commands = await self._hon.load_commands(self._appliance)
-    
-        self._appliance_model = commands.pop("applianceModel")
-
-        for item in ["options", "dictionaryId"]:
-            commands.pop(item)
-
-        for command, attr in commands.items():
-            if "parameters" in attr:
-                self._commands[command] = HonCommand(command, attr, self._hon, self)
-            if "setParameters" in attr and "parameters" in attr[list(attr)[0]]:
-                self._commands[command] = HonCommand(command, attr.get("setParameters"), self._hon, self)
-            elif "parameters" in attr[list(attr)[0]]:
-                multi = {}
-                for program, attr2 in attr.items():
-                    program = program.split(".")[-1].lower()
-                    cmd = HonCommand(command, attr2, self._hon, self, multi=multi, program=program)
-                    multi[program] = cmd
-                    self._commands[command] = cmd
-
-    async def load_statistics(self):
-        self._statistics = await self._hon.load_statistics(self)
-
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {
-                (DOMAIN, self._mac, self._type_name)
-            },
-            "name": self._name,
-            "manufacturer": self._brand,
-            "model": self._model,
-            "sw_version": self._fw_version,
-        }

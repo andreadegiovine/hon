@@ -1,46 +1,27 @@
-import asyncio
 import logging
-import voluptuous as vol
 import aiohttp
-import asyncio
 import secrets
 import json
 import re
-import ast
 import time
-import urllib.parse
 from urllib.parse import quote
-from datetime import datetime, timezone, timedelta
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from datetime import datetime
 
-_LOGGER = logging.getLogger(__name__)
-
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import device_registry as dr
-
-
+from .base import HonBaseCoordinator
 from .const import (
-    DOMAIN,
     CONF_ID_TOKEN,
     CONF_FRAMEWORK,
     CONF_COGNITO_TOKEN,
     CONF_REFRESH_TOKEN,
     AUTH_API,
-    API_URL,
-    APP_VERSION,
-    OS_VERSION,
-    OS,
-    DEVICE_MODEL,
+    API_URL
 )
 
-SESSION_TIMEOUT     = 21600 # 6 hours session
+_LOGGER = logging.getLogger(__name__)
 
-from .base import HonBaseCoordinator
-
-
+SESSION_TIMEOUT = 21600 # 6 hours session
 
 class HonConnection:
     def __init__(self, hass, entry, email = None, password = None) -> None:
@@ -71,17 +52,20 @@ class HonConnection:
         self._session = aiohttp.ClientSession(headers=self._header)
         self._appliances = []
 
-    async def async_close(self):
-        await self._session.close()
+    @property
+    def _headers(self):
+        return {
+            "Content-Type": "application/json",
+            "cognito-token": self._cognitoToken,
+            "id-token": self._id_token,
+        }
 
     @property
     def appliances(self):
         return self._appliances
 
-    async def async_get_existing_coordinator(self, mac):
-        if mac in self._coordinator_dict:
-            return self._coordinator_dict[mac]
-        return None
+    async def async_close(self):
+        await self._session.close()
         
     async def async_get_coordinator(self, appliance):
         mac = appliance.get("macAddress", "")
@@ -174,11 +158,13 @@ class HonConnection:
                 return False
 
         post_headers = {"id-token": self._id_token}
-        data = {"appVersion": APP_VERSION,
-                "mobileId": self._mobile_id,
-                "os": OS,
-                "osVersion": OS_VERSION,
-                "deviceModel": DEVICE_MODEL}
+        data = {
+           "mobileOs": 1234,
+           "osVersion": 1234,
+           "appVersion": 1234,
+           "deviceModel": 1234,
+           "mobileId": 1234
+       }
 
         async with self._session.post(f"{API_URL}/auth/v1/login", headers=post_headers, json=data) as resp:
             try:
@@ -214,7 +200,7 @@ class HonConnection:
         return True
 
 
-    async def load_commands(self, appliance):
+    async def get_programs(self, appliance):
         params = {
             "applianceType": appliance["applianceTypeId"],
             "code": appliance["code"],
@@ -222,8 +208,8 @@ class HonConnection:
             "firmwareId": appliance["eepromId"],
             "macAddress": appliance["macAddress"],
             "fwVersion": appliance["fwVersion"],
-            "os": OS,
-            "appVersion": APP_VERSION,
+            "os": 1234,
+            "appVersion": 1234,
             "series": appliance["series"],
         }
         url = f"{API_URL}/commands/v1/retrieve"
@@ -234,8 +220,7 @@ class HonConnection:
             _LOGGER.debug(f"Commands: {result}")
             return result
 
-    async def async_get_context(self, device):
-
+    async def get_context(self, device):
         # Create a new hOn session to avoid reaching the expiration
         elapsed_time = time.time() - self._start_time
         if( elapsed_time > SESSION_TIMEOUT ):
@@ -243,104 +228,48 @@ class HonConnection:
             await self.async_authorize()
 
         params = {
-            "macAddress": device.mac_address,
-            "applianceType": device.appliance_type,
+            "macAddress": device._mac_address,
+            "applianceType": device._type_name,
             "category": "CYCLE"
         }
         url = f"{API_URL}/commands/v1/context"
         async with self._session.get(url, params=params, headers=self._headers) as response:
             data = await response.json()
-            _LOGGER.debug(f"Context for mac[{device.mac_address}] type [{device.appliance_type}] {data}")
+            _LOGGER.debug(f"Context for mac[{device._mac_address}] type [{device._type_name}] {data}")
             return data.get("payload", {})
 
-    async def load_statistics(self, device):
-        params = {
-            "macAddress": device.mac_address,
-            "applianceType": device.appliance_type
-        }
-        url = f"{API_URL}/commands/v1/statistics"
-        async with self._session.get(url, params=params, headers=self._headers) as response:
-            data = await response.json()
-            _LOGGER.debug(f"Statistic for mac[{device.mac_address}] type [{device.appliance_type}] {data}")
-            return data.get("payload", {})
 
-    @property
-    def _headers(self):
-        return {
-            "Content-Type": "application/json",
-            "cognito-token": self._cognitoToken,
-            "id-token": self._id_token,
-        }
-
-    async def async_set(self, mac, typeName, parameters):
-
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        command = json.loads("{}")
-        command["macAddress"] = mac
-        command["commandName"] = "startProgram"
-        command["applianceOptions"] = json.loads("{}")
-        command["programName"] = "PROGRAMS." + typeName + ".HOME_ASSISTANT"
-        command["ancillaryParameters"] = json.loads(
-            '{"programFamily":"[standard]", "remoteActionable": "1", "remoteVisible": "1"}'
-        )
-        command["applianceType"] = typeName
-        command["attributes"] = json.loads(
-            '{"prStr":"HOME_ASSISTANT", "channel":"googleHome", "origin": "conversationalVoice"}'
-        )
-        if typeName == "WM":
-            command["attributes"] = json.loads(
-            '{"prStr":"HOME_ASSISTANT", "channel":"googleHome", "origin": "conversationalVoice", "energyLabel": "0"}'
-        )
-        command["device"] = json.loads(
-            '{"mobileId":"xxxxxxxxxxxxxxxxxxx", "mobileOs": "android", "osVersion": "31", "appVersion": "1.53.4", "deviceModel": "lito"}'
-        )
-        command["parameters"] = parameters
-        command["timestamp"] = timestamp
-        command["transactionId"] = mac + "_" + command["timestamp"]
-        _LOGGER.debug((f"Command sent (async_set): {command}"))
-
-        async with self._session.post(f"{API_URL}/commands/v1/send",headers=self._headers,json=command,) as resp:
-            try:
-                data = await resp.json()
-                _LOGGER.debug((f"Command result (async_set): {data}"))
-            except json.JSONDecodeError:
-                _LOGGER.error("hOn Invalid Data ["+ str(resp.text()) + "] after sending command ["+ str(command)+ "]")
-                return False
-            if data["payload"]["resultCode"] == "0":
-                return True
-            _LOGGER.error("hOn command has been rejected. Error message ["+ str(data) + "] sent command ["+ str(command)+ "]")
-        return False
-
-
-    async def send_command(self, device, command, parameters, ancillary_parameters):
+    async def send_command(self, device, command, parameters, program_name = False):
         now = datetime.utcnow().isoformat()
-        command = {
-            "macAddress": device.mac_address,
-            "timestamp": f"{now[:-3]}Z",
-            "commandName": command,
-            "transactionId": f"{device.mac_address}_{now[:-3]}Z",
-            "applianceOptions": device.commands_options,
-            "programName": "PROGRAMS." + device.appliance_type + "." + parameters["program"].upper(),
-            "device": {
-                "mobileId": self._mobile_id,
-                "mobileOs": OS,
-                "osVersion": OS_VERSION,
-                "appVersion": APP_VERSION,
-                "deviceModel": DEVICE_MODEL
-            },
-            "attributes": {
-                "channel": "mobileApp",
-                "origin": "standardProgram",
-                "energyLabel": "0"
-            },
-            "ancillaryParameters": ancillary_parameters,
-            "parameters": parameters,
-            "applianceType": device.appliance_type
+        args = {
+           "macAddress": device._mac_address,
+           "attributes": {
+               "channel": "mobileApp",
+               "origin": "standardProgram"
+           },
+           "device": {
+               "mobileOs": 1234,
+               "osVersion": 1234,
+               "appVersion": 1234,
+               "deviceModel": 1234,
+               "mobileId": 1234
+           },
+           "ancillaryParameters": {},
+           "applianceOptions": {},
+           "transactionId": f"{device._mac_address}_{now[:-3]}Z",
+           "commandName": command,
+           "parameters": parameters
         }
-        _LOGGER.debug((f"Command sent (send_command): {command}"))
 
-        url = f"{API_URL}/commands/v1/send"
-        async with self._session.post(url, headers=self._headers, json=command) as resp:
+        if program_name:
+            args["attributes"]["energyLabel"] = "0"
+            program_name = program_name.upper()
+            type = device._type_name.upper()
+            if type == "WM":
+                type = f"{type}_WD"
+            args["programName"] = f"PROGRAMS.{type}.{program_name}"
+
+        async with self._session.post(f"{API_URL}/commands/v1/send",headers=self._headers,json=args,) as resp:
             try:
                 data = await resp.json()
                 _LOGGER.debug((f"Command result (send_command): {data}"))
@@ -349,11 +278,5 @@ class HonConnection:
                 return False
             if data["payload"]["resultCode"] == "0":
                 return True
-            _LOGGER.error("hOn command has been rejected. Error message ["+ str(data) + "] sent data ["+ str(command)+ "]")
+            _LOGGER.error("hOn command has been rejected. Error message ["+ str(data) + "] sent command ["+ str(command)+ "]")
         return False
-
-
-def get_hOn_mac(device_id, hass):
-    device_registry = dr.async_get(hass)
-    device = device_registry.async_get(device_id)
-    return next(iter(device.identifiers))[1]

@@ -43,8 +43,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 class HonStartProgramButton(HonBaseButton):
     @property
     def available(self) -> bool:
-        mode = self._device._attributes["machMode"]
-        return self._device.is_available and mode in ["1","7"]
+        return self._device.is_available and self._device.get_data("machMode") in ["1","7"]
 
     async def async_press(self) -> None:
         await self._device.send_start()
@@ -53,8 +52,7 @@ class HonStartProgramButton(HonBaseButton):
 class HonStopProgramButton(HonBaseButton):
     @property
     def available(self) -> bool:
-        mode = self._device._attributes["machMode"]
-        return self._device.is_available and mode in ["2","3","4","5"]
+        return self._device.is_available and self._device.get_data("machMode") in ["2","3","4","5"]
 
     async def async_press(self) -> None:
         await self._device.send_stop()
@@ -63,8 +61,7 @@ class HonStopProgramButton(HonBaseButton):
 class HonPauseProgramButton(HonBaseButton):
     @property
     def available(self) -> bool:
-        mode = self._device._attributes["machMode"]
-        return self._device.is_available and mode in ["2","3"]
+        return self._device.is_available and self._device.get_data("machMode") in ["2","3"]
 
     async def async_press(self) -> None:
         await self._device.send_pause_resume()

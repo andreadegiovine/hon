@@ -46,7 +46,7 @@
         "name": "Acqua+"
       },
       "delayswitch": {
-        "name": "Avvio programmato (9:00)"
+        "name": "Avvio programmato"
       },
       "bestironing": {
         "name": "Stiratura facile"
@@ -100,6 +100,9 @@
       },
       "drytime": {
         "name": "Durata asciugatura"
+      },
+      "delayselect": {
+        "name": "Avvio programmato orario"
       },
       "wm_program": {
         "name": "Programma",

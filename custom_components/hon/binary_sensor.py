@@ -44,42 +44,41 @@ class HonDevice(HonBaseDevice):
             self._attr_extra_state_attributes = attributes
             return
 
-        if "machMode" in self._device._attributes:
-            mode = self._device._attributes["machMode"]
+        if self._device.get_data("machMode"):
+            mode = self._device.get_data("machMode")
             if mode == "5":
                 mode = "4"
             attributes["mode"] = mode
 
         for key in ["error","errors"]:
-            if key in self._device._attributes:
-                if self._device._attributes[key] != "00":
-                    attributes["error"] = self._device._attributes[key]
+            if self._device.get_data(key) and self._device.get_data(key) != "00":
+                attributes["error"] = self._device.get_data(key)
 
         if self._device.is_running:
-            if "temp" in self._device._attributes:
-                attributes["temperature"] = str(self._device._attributes["temp"]) + " °C"
+            if self._device.get_data("temp"):
+                attributes["temperature"] = str(self._device.get_data("temp")) + " °C"
 
-            if "dryLevel" in self._device._attributes:
-                dry_level = self._device._attributes["dryLevel"]
+            if self._device.get_data("dryLevel"):
+                dry_level = self._device.get_data("dryLevel")
                 translation_path = f"component.hon.entity.select.drylevel.state.{dry_level}"
                 attributes["dry_level"] = self._translations.get(translation_path, dry_level)
 
-            if "prCode" in self._device._attributes:
+            if self._device.get_data("prCode"):
                 translation_path = f"component.hon.entity.select.{self._coordinator.device._type_name.lower()}_program.state.{self._device._program}"
                 attributes["program_name"] = self._translations.get(translation_path, self._device._program)
 
-            if "prPhase" in self._device._attributes:
-                pr_phase = self._device._attributes["prPhase"]
+            if self._device.get_data("prPhase"):
+                pr_phase = self._device.get_data("prPhase")
                 translation_path = f"component.hon.entity.binary_sensor.{self._coordinator.device._type_name.lower()}.state_attributes.program_phase.state.{pr_phase}"
                 attributes["program_phase"] = self._translations.get(translation_path, pr_phase)
 
-            if "spinSpeed" in self._device._attributes:
-                attributes["spin_speed"] = str(self._device._attributes["spinSpeed"]) + " rpm"
+            if self._device.get_data("spinSpeed"):
+                attributes["spin_speed"] = str(self._device.get_data("spinSpeed")) + " rpm"
 
 
-            if "remainingTimeMM" in self._device._attributes:
-                delay = int(self._device._attributes["delayTime"])
-                remaining = int(self._device._attributes["remainingTimeMM"])
+            if self._device.get_data("remainingTimeMM"):
+                delay = int(self._device.get_data("delayTime"))
+                remaining = int(self._device.get_data("remainingTimeMM"))
                 value = None
                 if remaining > 0:
                     value = datetime.now(timezone.utc).replace(second=0) + timedelta(minutes=delay + remaining)

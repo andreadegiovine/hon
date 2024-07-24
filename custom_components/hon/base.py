@@ -125,7 +125,7 @@ class HonBaseSensor(HonBaseEntity):
 
     @property
     def available(self) -> bool:
-        return (self.entity_description.key in self._device._settings) and self._device.is_available and (not self._device.is_running)
+        return self._device.get_setting(self.entity_description.key) != None and self._device.is_available and (not self._device.is_running)
 
     @callback
     def _handle_coordinator_update(self):
@@ -148,20 +148,19 @@ class HonBaseButton(HonBaseEntity, ButtonEntity):
 class HonBaseSwitch(HonBaseSensor, SwitchEntity):
     @property
     def is_on(self):
-        return self.available and self._device._settings[self.entity_description.key]["value"] == 1
+        return self.available and self._device.get_setting(self.entity_description.key) == 1
 
     async def async_turn_on(self, **kwargs: Any):
-        self._device._settings[self.entity_description.key]["value"] = 1
-        await self.coordinator.async_refresh()
+        self._device.set_setting({self.entity_description.key: 1})
 
     async def async_turn_off(self, **kwargs: Any):
-        self._device._settings[self.entity_description.key]["value"] = 0
+        self._device.set_setting({self.entity_description.key: 0})
 
     def coordinator_update(self):
         if not self.available:
             self._attr_is_on = False
         else:
-            self._attr_is_on = self._device._settings[self.entity_description.key]["value"] == 1
+            self._attr_is_on = self._device.get_setting(self.entity_description.key) == 1
 
 
 class HonBaseSelect(HonBaseSensor, SelectEntity):
@@ -173,10 +172,10 @@ class HonBaseSelect(HonBaseSensor, SelectEntity):
     def current_option(self) -> str | None:
         if not self.available:
             return None
-        return str(self._device._settings[self.entity_description.key]["value"])
+        return str(self._device.get_setting(self.entity_description.key))
 
     async def async_select_option(self, option: str) -> None:
-        self._device._settings[self.entity_description.key]["value"] = str(option)
+        self._device.set_setting({self.entity_description.key: str(option)})
 
     def coordinator_update(self):
         if not self.available:
@@ -184,7 +183,7 @@ class HonBaseSelect(HonBaseSensor, SelectEntity):
             self._attr_current_option = None
         else:
             self._attr_options = self._device._settings[self.entity_description.key]["options"]
-            self._attr_current_option = str(self._device._settings[self.entity_description.key]["value"])
+            self._attr_current_option = str(self._device.get_setting(self.entity_description.key))
 
 
 class HonBaseDevice(HonBaseEntity, BinarySensorEntity):

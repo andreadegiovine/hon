@@ -29,6 +29,8 @@ class HonDevice(CoordinatorEntity):
         self._programs = {}
         self._program = None
         self._settings = {}
+        self._static_settings = {}
+        self._delay_time = "09:00"
 
     @property
     def sensors(self):
@@ -37,16 +39,13 @@ class HonDevice(CoordinatorEntity):
             program_options = self._programs[program_name]
             for option_name in program_options:
                 option = program_options[option_name]
-                if ("type" in option) and (not option_name in sensors[option["type"]]) and option_name != "lang":
+                if ("type" in option) and (not option_name in sensors[option["type"]]):
                     sensors[option["type"]].append(option_name)
         return sensors
 
     @property
     def is_on(self):
-        last_event_online = True
-        if "lastConnEvent" in self._attributes:
-            last_event_online = self._attributes["lastConnEvent"] != "DISCONNECTED"
-        return self._attributes["remoteCtrValid"] == "1" and last_event_online
+        return self.get_data("remoteCtrValid") == "1" or self.get_data("lastConnEvent") == "CONNECTED"
 
     @property
     def is_available(self):
@@ -54,18 +53,40 @@ class HonDevice(CoordinatorEntity):
 
     @property
     def is_running(self):
-        if "machMode" in self._attributes:
-            return self._attributes["machMode"] in ["2","3","4","5"]
+        if self.get_data("machMode") in ["2","3","4","5"]:
+            return True
         return False
 
     def set_program(self, program_name):
         self._program = program_name
         self._settings = self._programs[self._program]
+        self._coordinator.async_update_listeners()
+
+    def get_data(self, key):
+        if key in self._attributes:
+            return self._attributes[key]
+        return None
 
     def set_data(self, data):
         for key in data:
             self._attributes[key] = data[key]
-            self._coordinator.async_update_listeners()
+        self._coordinator.async_update_listeners()
+
+    def get_setting(self, key):
+        if key in ["delayTime","lang"] and key in self._static_settings:
+            return self._static_settings[key]
+        if key in self._settings:
+            return self._settings[key]["value"]
+        return None
+
+    def set_setting(self, data):
+        for key in data:
+            if key in ["delayTime","lang"]:
+                self._static_settings[key] = data[key]
+            else:
+                self._settings[key]["value"] = data[key]
+                self._programs[self._program][key]["value"] = data[key]
+        self._coordinator.async_update_listeners()
 
     async def get_programs(self):
         commands = await self._hon.get_programs(self._appliance)
@@ -99,34 +120,38 @@ class HonDevice(CoordinatorEntity):
     async def get_context(self):
         data = await self._hon.get_context(self)
 
+        attributes = {}
+
         for name, values in data.pop("shadow", {'NA': 0}).get("parameters").items():
-            self._attributes[name] = values["parNewVal"]
+            attributes[name] = values["parNewVal"]
 
             if name == "prPhase":
                 if self._type_name.upper() == "WM":
-                    if self._attributes[name] in ["0","10"]: # Ready
-                        self._attributes[name] = "0"
-                    if self._attributes[name] in ["1","2","14","15","16","25","27"]: # Wash
-                        self._attributes[name] = "1"
-                    if self._attributes[name] in ["3","11"]: # Spin
-                        self._attributes[name] = "3"
-                    if self._attributes[name] in ["4","5","6","17","18"]: # Rinse
-                        self._attributes[name] = "4"
-                    if self._attributes[name] in ["7","8"]: # Drying
-                        self._attributes[name] = "7"
-                    if self._attributes[name] in ["12","13"]: # Weighing
-                        self._attributes[name] = "12"
+                    if attributes[name] in ["0","10"]: # Ready
+                        attributes[name] = "0"
+                    if attributes[name] in ["1","2","14","15","16","25","27"]: # Wash
+                        attributes[name] = "1"
+                    if attributes[name] in ["3","11"]: # Spin
+                        attributes[name] = "3"
+                    if attributes[name] in ["4","5","6","17","18"]: # Rinse
+                        attributes[name] = "4"
+                    if attributes[name] in ["7","8"]: # Drying
+                        attributes[name] = "7"
+                    if attributes[name] in ["12","13"]: # Weighing
+                        attributes[name] = "12"
                 if self._type_name.upper() == "TD":
-                    if self._attributes[name] in ["0","11"]: # Ready
-                        self._attributes[name] = "0"
-                    if self._attributes[name] in ["1","2","14","15","19","20"]: # Drying
-                        self._attributes[name] = "1"
-                    if self._attributes[name] in ["3","13","16"]: # Cooldown
-                        self._attributes[name] = "3"
-                    if self._attributes[name] in ["8","12","17"]: # Unknown
-                        self._attributes[name] = "8"
+                    if attributes[name] in ["0","11"]: # Ready
+                        attributes[name] = "0"
+                    if attributes[name] in ["1","2","14","15","19","20"]: # Drying
+                        attributes[name] = "1"
+                    if attributes[name] in ["3","13","16"]: # Cooldown
+                        attributes[name] = "3"
+                    if attributes[name] in ["8","12","17"]: # Unknown
+                        attributes[name] = "8"
 
-        self._attributes["lastConnEvent"] = data["lastConnEvent"]["category"]
+        attributes["lastConnEvent"] = data["lastConnEvent"]["category"]
+
+        self.set_data(attributes)
 
     async def send_start(self):
         if (not self._program) or (not self._settings):
@@ -135,13 +160,12 @@ class HonDevice(CoordinatorEntity):
         params = {}
 
         for param in self._settings:
-            attrs = self._settings[param]
-            params[param] = str(attrs["value"])
+            params[param] = str(self.get_setting(param))
 
         result = await self._hon.send_command(self, "startProgram", params, self._program)
         if result:
             new_mode = "2"
-            if int(self._settings["delayTime"]["value"]) > 0:
+            if int(self.get_setting("delayTime")) > 0:
                 new_mode = "4"
             self.set_data({"machMode": new_mode})
 
@@ -153,7 +177,7 @@ class HonDevice(CoordinatorEntity):
 
 
     async def send_pause_resume(self):
-        mode = self._attributes["machMode"]
+        mode = self.get_data("machMode")
 
         if mode not in ["2","3"]:
             return

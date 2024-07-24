@@ -47,30 +47,39 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 class HonDelaySwitch(HonBaseSwitch):
     @property
     def available(self) -> bool:
-        return ("delayTime" in self._device._settings) and self._device.is_available and (not self._device.is_running)
+        return self._device.get_setting("delayTime") != None and self._device.is_available and (not self._device.is_running)
 
     @property
     def is_on(self) -> bool | None:
-        return self.available and int(self._device._settings["delayTime"]["value"]) > 0
+        return self.available and self._device.get_setting("delayTime") and int(self._device.get_setting("delayTime")) > 0
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
+    def set_delay(self):
         day = datetime.now()
 
-        if int(datetime.now().strftime("%H")) > 9:
+        delay_hour = int(self._device._delay_time.split(":")[0])
+        delay_minute = int(self._device._delay_time.split(":")[1])
+
+        if int(datetime.now().strftime("%H")) > delay_hour-1:
             day = datetime.now() + timedelta(days=1)
 
-        delay = int((day.replace(hour=9, minute=00, second=00) - datetime.now()).total_seconds() / 60)
+        delay = int((day.replace(hour=delay_hour, minute=delay_minute, second=00) - datetime.now()).total_seconds() / 60)
         delay = math.floor(delay / 30) * 30
 
-        self._device._settings["delayTime"]["value"] = str(delay)
-        await self.coordinator.async_refresh()
+        if int(self._device.get_setting("delayTime")) != int(delay):
+            self._device.set_setting({"delayTime": str(delay)})
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self.set_delay()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        self._device._settings["delayTime"]["value"] = "0"
-        await self.coordinator.async_refresh()
+        self._device.set_setting({"delayTime": "0"})
 
     def coordinator_update(self):
         if not self.available:
             self._attr_is_on = False
+        elif self._device.get_setting("delayTime"):
+            self._attr_is_on = int(self._device.get_setting("delayTime")) > 0
+            if self._attr_is_on:
+                self.set_delay()
         else:
-            self._attr_is_on = int(self._device._settings["delayTime"]["value"]) > 0
+            self._attr_is_on = False

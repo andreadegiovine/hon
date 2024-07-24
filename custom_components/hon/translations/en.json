@@ -46,7 +46,7 @@
         "name": "Acqua+"
       },
       "delayswitch": {
-        "name": "Scheduled start (9:00)"
+        "name": "Scheduled start"
       },
       "bestironing": {
         "name": "Best Ironing"
@@ -100,6 +100,9 @@
       },
       "drytime": {
         "name": "Dry Time"
+      },
+      "delayselect": {
+        "name": "Scheduled start time"
       },
       "wm_program": {
         "name": "Program",

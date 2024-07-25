@@ -55,7 +55,7 @@ class HonDevice(CoordinatorEntity):
 
     @property
     def is_on(self):
-        return self.get_data("remoteCtrValid") == "1" or self.get_data("lastConnEvent") == "CONNECTED"
+        return self.get_data("remoteCtrValid") == "1" and self.get_data("lastConnEvent") == "CONNECTED"
 
     @property
     def is_available(self):

@@ -665,6 +665,12 @@
             }
           }
         }
+      },
+      "notify": {
+        "state": {
+          "autosoftener": "\"Auto Softener\" is not active, add softener manually and resume the program.",
+          "autodetergent": "\"Auto Detergent\" is not active, add the detergent manually and start the program again."
+        }
       }
     }
   }

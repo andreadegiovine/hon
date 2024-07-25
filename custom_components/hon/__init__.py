@@ -4,6 +4,7 @@ import voluptuous as vol
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import translation
 
 from .const import DOMAIN, PLATFORMS
 from .hon import HonConnection
@@ -42,9 +43,11 @@ async def async_setup_entry(hass, entry):
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.unique_id] = hon
 
+    translations = await translation.async_get_translations(hass, hass.config.language, "entity")
+
     for appliance in hon.appliances:
         coordinator = await hon.async_get_coordinator(appliance)
-        coordinator.device = HonDevice(hon, coordinator, appliance)
+        coordinator.device = HonDevice(hass, hon, coordinator, appliance, translations)
         await coordinator.async_config_entry_first_refresh()
         await coordinator.device.get_programs()
 

@@ -14,10 +14,11 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
     hon = hass.data[DOMAIN][entry.unique_id]
     appliances = []
 
+    translations = await translation.async_get_translations(hass, hass.config.language, "entity")
+
     for appliance in hon.appliances:
 
         coordinator = await hon.async_get_coordinator(appliance)
-        translations = await translation.async_get_translations(hass, hass.config.language, "entity")
 
         default_value = SENSORS_DEFAULT.get(coordinator.device._type_name.lower(), {})
 

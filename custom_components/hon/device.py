@@ -1,15 +1,23 @@
 import logging
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.components.notify import (
+    ATTR_MESSAGE,
+    ATTR_TITLE,
+    DOMAIN,
+    SERVICE_NOTIFY,
+)
 
 from .const import APPLIANCE_DEFAULT_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
 class HonDevice(CoordinatorEntity):
-    def __init__(self, hon, coordinator, appliance) -> None:
+    def __init__(self, hass, hon, coordinator, appliance, translations) -> None:
         super().__init__(coordinator)
 
+        self._hass          = hass
+        self._translations  = translations
         self._hon           = hon
         self._coordinator   = coordinator
         self._appliance     = appliance
@@ -31,6 +39,8 @@ class HonDevice(CoordinatorEntity):
         self._settings = {}
         self._static_settings = {}
         self._delay_time = "09:00"
+        self._auto_detergent_notify = False
+        self._auto_softener_notify = False
 
     @property
     def sensors(self):
@@ -87,6 +97,11 @@ class HonDevice(CoordinatorEntity):
                 self._settings[key]["value"] = data[key]
                 self._programs[self._program][key]["value"] = data[key]
         self._coordinator.async_update_listeners()
+
+    async def send_notify(self, message):
+        data = {ATTR_TITLE: self._name}
+        data[ATTR_MESSAGE] = message
+        await self._hass.services.async_call(DOMAIN, SERVICE_NOTIFY, data)
 
     async def get_programs(self):
         commands = await self._hon.get_programs(self._appliance)
@@ -153,6 +168,11 @@ class HonDevice(CoordinatorEntity):
 
         self.set_data(attributes)
 
+        if self._auto_softener_notify and "machMode" in attributes and int(attributes["machMode"]) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < 20:
+            self.send_pause_resume()
+            await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autosoftener", "autosoftener"))
+            self._auto_softener_notify = False
+
     async def send_start(self):
         if (not self._program) or (not self._settings):
             return
@@ -162,18 +182,30 @@ class HonDevice(CoordinatorEntity):
         for param in self._settings:
             params[param] = str(self.get_setting(param))
 
+        if not self._auto_detergent_notify and "autoDetergentStatus" in params and int(params["autoDetergentStatus"]) != 1:
+            await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autodetergent", "autodetergent"))
+            self._auto_detergent_notify = True
+            return
+
+        if not self._auto_softener_notify and "autoSoftenerStatus" in params and int(params["autoSoftenerStatus"]) != 1:
+            self._auto_softener_notify = True
+
         result = await self._hon.send_command(self, "startProgram", params, self._program)
         if result:
             new_mode = "2"
             if int(self.get_setting("delayTime")) > 0:
                 new_mode = "4"
             self.set_data({"machMode": new_mode})
+            self._auto_detergent_notify = False
+            self._auto_softener_notify = False
 
 
     async def send_stop(self):
         result = await self._hon.send_command(self, "stopProgram", {"onOffStatus": "0"})
         if result:
             self.set_data({"machMode": "1"})
+            self._auto_detergent_notify = False
+            self._auto_softener_notify = False
 
 
     async def send_pause_resume(self):

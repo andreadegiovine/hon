@@ -662,7 +662,8 @@
       "notify": {
         "state": {
           "autosoftener": "\"Ammorbidente auto\" non è attivo, aggiungi l'ammorbidente manualmente e fai riprendere il programma.",
-          "autodetergent": "\"Detersivo auto\" non è attivo, aggiungi il detersivo manualmente e avvia nuovamente il programma."
+          "autodetergent": "\"Detersivo auto\" non è attivo, aggiungi il detersivo manualmente e avvia nuovamente il programma.",
+          "finished": "Il programma è terminato, svuota il cestello."
         }
       }
     }

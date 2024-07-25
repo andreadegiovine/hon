@@ -166,6 +166,11 @@ class HonDevice(CoordinatorEntity):
 
         attributes["lastConnEvent"] = data["lastConnEvent"]["category"]
 
+        if "machMode" in attributes and int(attributes["machMode"]) == 7 and int(self.get_data("machMode")) == 2:
+            await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.finished", "finished"))
+            self._auto_detergent_notify = False
+            self._auto_softener_notify = False
+
         self.set_data(attributes)
 
         if self._auto_softener_notify and "machMode" in attributes and int(attributes["machMode"]) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < 20:
@@ -196,8 +201,6 @@ class HonDevice(CoordinatorEntity):
             if int(self.get_setting("delayTime")) > 0:
                 new_mode = "4"
             self.set_data({"machMode": new_mode})
-            self._auto_detergent_notify = False
-            self._auto_softener_notify = False
 
 
     async def send_stop(self):

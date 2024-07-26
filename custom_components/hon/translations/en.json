@@ -668,8 +668,10 @@
       },
       "notify": {
         "state": {
-          "autosoftener": "\"Auto Softener\" is not active, add softener manually and resume the program.",
-          "autodetergent": "\"Auto Detergent\" is not active, add the detergent manually and start the program again.",
+          "autosoftener_manually": "\"Auto Softener\" is not active, add softener manually and resume the program.",
+          "autodetergent_manually": "\"Auto Detergent\" is not active, add detergent manually and start the program again.",
+          "autosoftener_level": "Softener level low, add softener and start the program again.",
+          "autodetergent_level": "Detergent level low, add detergent and start the program again.",
           "finished": "The program is finished, empty the basket."
         }
       }

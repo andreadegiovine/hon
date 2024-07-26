@@ -1,9 +1,9 @@
 import logging
 
-from homeassistant.components.button import ButtonEntityDescription
+from homeassistant.components.button import ( ButtonEntityDescription, ButtonEntity )
 
 from .const import DOMAIN
-from .base import HonBaseButton
+from .base import HonBaseEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,14 +33,14 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
             icon="mdi:play-pause",
             translation_key="pause"
         )
-        appliances.extend([HonStartProgramButton(coordinator, appliance, start, hass)])
-        appliances.extend([HonStopProgramButton(coordinator, appliance, stop, hass)])
-        appliances.extend([HonPauseProgramButton(coordinator, appliance, pause, hass)])
+        appliances.extend([HonStartProgramButton(coordinator, appliance, start)])
+        appliances.extend([HonStopProgramButton(coordinator, appliance, stop)])
+        appliances.extend([HonPauseProgramButton(coordinator, appliance, pause)])
 
     async_add_entities(appliances)
 
 
-class HonStartProgramButton(HonBaseButton):
+class HonStartProgramButton(HonBaseEntity, ButtonEntity):
     @property
     def available(self) -> bool:
         return self._device.is_available and self._device.get_data("machMode") in ["1","7"]
@@ -49,7 +49,7 @@ class HonStartProgramButton(HonBaseButton):
         await self._device.send_start()
 
 
-class HonStopProgramButton(HonBaseButton):
+class HonStopProgramButton(HonBaseEntity, ButtonEntity):
     @property
     def available(self) -> bool:
         return self._device.is_available and self._device.get_data("machMode") in ["2","3","4","5"]
@@ -58,7 +58,7 @@ class HonStopProgramButton(HonBaseButton):
         await self._device.send_stop()
 
 
-class HonPauseProgramButton(HonBaseButton):
+class HonPauseProgramButton(HonBaseEntity, ButtonEntity):
     @property
     def available(self) -> bool:
         return self._device.is_available and self._device.get_data("machMode") in ["2","3"]

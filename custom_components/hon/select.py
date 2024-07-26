@@ -99,3 +99,4 @@ class HonProgramSelect(HonBaseSelect):
             self._attr_options = []
         else:
             self._attr_options = list(self._device._programs)
+            self._attr_extra_state_attributes = self._device.get_program_details()

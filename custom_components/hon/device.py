@@ -13,13 +13,13 @@ from .const import APPLIANCE_DEFAULT_NAME
 _LOGGER = logging.getLogger(__name__)
 
 class HonDevice(CoordinatorEntity):
-    def __init__(self, hass, hon, coordinator, appliance, translations) -> None:
+    def __init__(self, hon, coordinator, appliance, translations) -> None:
         super().__init__(coordinator)
 
-        self._hass          = hass
         self._translations  = translations
         self._hon           = hon
         self._coordinator   = coordinator
+        self._hass          = self._coordinator.hass
         self._appliance     = appliance
         self._brand         = appliance["brand"]
         self._type_name     = appliance["applianceTypeName"]
@@ -39,14 +39,23 @@ class HonDevice(CoordinatorEntity):
         self._settings = {}
         self._static_settings = {}
         self._delay_time = "09:00"
-        self._auto_detergent_notify = False
-        self._auto_softener_notify = False
+        self._manually_detergent_notify = False
+        self._manually_softener_notify = False
+        self._low_detergent_notify = False
+        self._low_softener_notify = False
+
+    @property
+    def program_params(self):
+        params = {}
+        for program_name in self._programs:
+            params[program_name] = self._programs[program_name]["params"]
+        return params
 
     @property
     def sensors(self):
         sensors = {"switch": [], "select": []}
-        for program_name in self._programs:
-            program_options = self._programs[program_name]
+        for program_name in self.program_params:
+            program_options = self.program_params[program_name]
             for option_name in program_options:
                 option = program_options[option_name]
                 if ("type" in option) and (not option_name in sensors[option["type"]]):
@@ -69,8 +78,38 @@ class HonDevice(CoordinatorEntity):
 
     def set_program(self, program_name):
         self._program = program_name
-        self._settings = self._programs[self._program]
+        self._settings = self.program_params[self._program]
         self._coordinator.async_update_listeners()
+
+    def get_program_details(self):
+        details = {}
+        if self._program:
+            program_data = self._programs[self._program]
+
+            if "info" in program_data:
+                details["info"] = program_data["info"]
+
+            if "timing" in program_data:
+                timing = 0
+                timing_data = program_data["timing"]
+                for option in timing_data:
+                    option_setting = self.get_setting(option)
+                    if option_setting != None:
+                        option_setting = str(option_setting)
+                        if option in ["dirtyLevel","dryLevel","dryTime"]:
+                            timing = timing + int(timing_data[option][option_setting])
+                        elif option == "steamLevel":
+                            timing = timing + int(timing_data["steamLevel"]["+steamType"][option_setting])
+                        else:
+                            for phase in timing_data[option]:
+                                timing = timing + int(timing_data[option][phase][option_setting])
+                if timing//60 > 0:
+                    timing = str(timing//60) + ":" + str(timing%60)
+                else:
+                    timing = str(timing) + " min"
+                details["timing"] = timing
+
+        return details
 
     def get_data(self, key):
         if key in self._attributes:
@@ -95,7 +134,7 @@ class HonDevice(CoordinatorEntity):
                 self._static_settings[key] = data[key]
             else:
                 self._settings[key]["value"] = data[key]
-                self._programs[self._program][key]["value"] = data[key]
+                self._programs[self._program]["params"][key]["value"] = data[key]
         self._coordinator.async_update_listeners()
 
     async def send_notify(self, message):
@@ -128,7 +167,10 @@ class HonDevice(CoordinatorEntity):
                 elif "mandatory" in param_attr and "fixedValue" in param_attr:
                     program_params[param] = {"value": int(param_attr["fixedValue"])}
 
-            self._programs[program_name] = program_params
+            program_data = {"info": program_attr["description"], "params": program_params}
+            if "remainingTimes" in program_attr:
+                program_data["timing"] = program_attr["remainingTimes"]
+            self._programs[program_name] = program_data
 
         self.set_program(list(self._programs)[0])
 
@@ -168,15 +210,15 @@ class HonDevice(CoordinatorEntity):
 
         if "machMode" in attributes and int(attributes["machMode"]) == 7 and int(self.get_data("machMode")) == 2:
             await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.finished", "finished"))
-            self._auto_detergent_notify = False
-            self._auto_softener_notify = False
+            self._manually_detergent_notify = False
+            self._manually_softener_notify = False
 
         self.set_data(attributes)
 
-        if self._auto_softener_notify and "machMode" in attributes and int(attributes["machMode"]) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < 20:
+        if self._manually_softener_notify and "machMode" in attributes and int(attributes["machMode"]) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < 20:
             self.send_pause_resume()
-            await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autosoftener", "autosoftener"))
-            self._auto_softener_notify = False
+            await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autosoftener_manually", "autosoftener_manually"))
+            self._manually_softener_notify = False
 
     async def send_start(self):
         if (not self._program) or (not self._settings):
@@ -187,13 +229,29 @@ class HonDevice(CoordinatorEntity):
         for param in self._settings:
             params[param] = str(self.get_setting(param))
 
-        if not self._auto_detergent_notify and "autoDetergentStatus" in params and int(params["autoDetergentStatus"]) != 1:
-            await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autodetergent", "autodetergent"))
-            self._auto_detergent_notify = True
+        if not self._low_detergent_notify and "autoDetergentStatus" in params and int(params["autoDetergentStatus"]) == 1 and self.get_data("detWarn") != None:
+            if int(self.get_data("detWarn")) == 1:
+                await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autodetergent_level", "autodetergent_level"))
+                self._low_detergent_notify = True
+                return
+            else:
+                self._low_detergent_notify = False
+
+        if not self._low_softener_notify and "autoSoftenerStatus" in params and int(params["autoSoftenerStatus"]) == 1 and self.get_data("softWarn") != None:
+            if int(self.get_data("softWarn")) == 1:
+                await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autosoftener_level", "autosoftener_level"))
+                self._low_softener_notify = True
+                return
+            else:
+                self._low_softener_notify = False
+
+        if not self._manually_detergent_notify and "autoDetergentStatus" in params and int(params["autoDetergentStatus"]) != 1:
+            await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autodetergent_manually", "autodetergent_manually"))
+            self._manually_detergent_notify = True
             return
 
-        if not self._auto_softener_notify and "autoSoftenerStatus" in params and int(params["autoSoftenerStatus"]) != 1:
-            self._auto_softener_notify = True
+        if not self._manually_softener_notify and "autoSoftenerStatus" in params and int(params["autoSoftenerStatus"]) != 1:
+            self._manually_softener_notify = True
 
         result = await self._hon.send_command(self, "startProgram", params, self._program)
         if result:
@@ -207,8 +265,8 @@ class HonDevice(CoordinatorEntity):
         result = await self._hon.send_command(self, "stopProgram", {"onOffStatus": "0"})
         if result:
             self.set_data({"machMode": "1"})
-            self._auto_detergent_notify = False
-            self._auto_softener_notify = False
+            self._manually_detergent_notify = False
+            self._manually_softener_notify = False
 
 
     async def send_pause_resume(self):

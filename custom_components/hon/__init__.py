@@ -47,7 +47,7 @@ async def async_setup_entry(hass, entry):
 
     for appliance in hon.appliances:
         coordinator = await hon.async_get_coordinator(appliance)
-        coordinator.device = HonDevice(hass, hon, coordinator, appliance, translations)
+        coordinator.device = HonDevice(hon, coordinator, appliance, translations)
         await coordinator.async_config_entry_first_refresh()
         await coordinator.device.get_programs()
 

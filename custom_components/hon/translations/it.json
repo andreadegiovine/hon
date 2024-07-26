@@ -661,8 +661,10 @@
       },
       "notify": {
         "state": {
-          "autosoftener": "\"Ammorbidente auto\" non è attivo, aggiungi l'ammorbidente manualmente e fai riprendere il programma.",
-          "autodetergent": "\"Detersivo auto\" non è attivo, aggiungi il detersivo manualmente e avvia nuovamente il programma.",
+          "autosoftener_manually": "\"Ammorbidente auto\" non è attivo, aggiungi l'ammorbidente manualmente e fai riprendere il programma.",
+          "autodetergent_manually": "\"Detersivo auto\" non è attivo, aggiungi il detersivo manualmente e avvia nuovamente il programma.",
+          "autosoftener_level": "Livello di ammorbidente basso, aggiungi il l'ammorbidente ed inizia il programma nuovamente.",
+          "autodetergent_level": "Livello di detersivo basso, aggiungi il detersivo ed inizia il programma nuovamente.",
           "finished": "Il programma è terminato, svuota il cestello."
         }
       }

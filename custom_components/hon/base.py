@@ -6,7 +6,6 @@ from datetime import timedelta
 from homeassistant.helpers.update_coordinator import ( DataUpdateCoordinator, CoordinatorEntity )
 from homeassistant.core import callback
 from homeassistant.components.select import SelectEntity
-from homeassistant.components.button import ButtonEntity
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.components.binary_sensor import BinarySensorEntity
 
@@ -114,7 +113,6 @@ class HonBaseEntity(CoordinatorEntity):
         return True
 
 
-
 """Used for update device settings"""
 class HonBaseSensor(HonBaseEntity):
     def __init__(self, coordinator, appliance, description):
@@ -137,12 +135,6 @@ class HonBaseSensor(HonBaseEntity):
     def coordinator_update(self):
         """Update entity state"""
         raise NotImplementedError
-
-
-class HonBaseButton(HonBaseEntity, ButtonEntity):
-    def __init__(self, coordinator, appliance, description, hass):
-        super().__init__(coordinator, appliance, description)
-        self._hass = hass
 
 
 class HonBaseSwitch(HonBaseSensor, SwitchEntity):

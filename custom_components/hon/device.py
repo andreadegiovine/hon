@@ -208,17 +208,18 @@ class HonDevice(CoordinatorEntity):
 
         attributes["lastConnEvent"] = data["lastConnEvent"]["category"]
 
-        if "machMode" in attributes and int(attributes["machMode"]) == 7 and int(self.get_data("machMode")) == 2:
+        if "machMode" in attributes and int(attributes["machMode"]) == 7 and self.get_data("machMode") != None and int(self.get_data("machMode")) == 2:
             await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.finished", "finished"))
             self._manually_detergent_notify = False
             self._manually_softener_notify = False
-
-        self.set_data(attributes)
 
         if self._manually_softener_notify and "machMode" in attributes and int(attributes["machMode"]) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < 20:
             self.send_pause_resume()
             await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autosoftener_manually", "autosoftener_manually"))
             self._manually_softener_notify = False
+            return
+
+        self.set_data(attributes)
 
     async def send_start(self):
         if (not self._program) or (not self._settings):

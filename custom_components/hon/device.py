@@ -152,6 +152,9 @@ class HonDevice(CoordinatorEntity):
             program_attr = commands["startProgram"][program]
             program_name = program.split(".")[-1].lower()
 
+            if program_name.endswith("_steam") or program_name.find("_dash_") != -1:
+                continue
+
             program_params = {}
             for param in program_attr["parameters"]:
                 param_attr = program_attr["parameters"][param]

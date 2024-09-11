@@ -273,6 +273,9 @@ class HonConnection:
                 type = f"{type}_WD"
             args["programName"] = f"PROGRAMS.{type}.{program_name}"
 
+        _LOGGER.debug("Send command")
+        _LOGGER.debug(args)
+
         async with self._session.post(f"{API_URL}/commands/v1/send",headers=self._headers,json=args,) as resp:
             try:
                 data = await resp.json()

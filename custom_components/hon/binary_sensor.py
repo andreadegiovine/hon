@@ -47,12 +47,21 @@ class HonDevice(HonBaseDevice):
                 option_setting = self._device.get_current_program_param(option)["value"]
                 option_setting = str(option_setting)
                 if option in ["dirtyLevel","dryLevel","dryTime"]:
-                    timing = timing + int(timing_data[option][option_setting])
+                    if option_setting in timing_data[option]:
+                        timing = timing + int(timing_data[option][option_setting])
+                    else:
+                        timing = timing + int(timing_data[option]["default"])
                 elif option == "steamLevel":
                     timing = timing + int(timing_data["steamLevel"]["+steamType"][option_setting])
                 else:
                     for phase in timing_data[option]:
-                        timing = timing + int(timing_data[option][phase][option_setting])
+                        if option_setting in timing_data[option][phase]:
+                            timing = timing + int(timing_data[option][phase][option_setting])
+                        else:
+                            _LOGGER.error("Missing timing value")
+                            _LOGGER.error(option)
+                            _LOGGER.error(option_setting)
+                            _LOGGER.error(timing_data[option])
         if timing//60 > 0:
             timing = str(timing//60) + ":" + str(timing%60)
         else:

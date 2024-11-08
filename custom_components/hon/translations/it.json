@@ -611,6 +611,12 @@
           "program_name": {
             "name": "Programma"
           },
+          "program_description": {
+            "name": "Descrizione"
+          },
+          "program_duration": {
+            "name": "Durata"
+          },
           "spin_speed": {
             "name": "Centrifuga"
           },

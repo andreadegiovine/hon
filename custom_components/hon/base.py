@@ -123,7 +123,7 @@ class HonBaseSensor(HonBaseEntity):
 
     @property
     def available(self) -> bool:
-        return self._device.get_setting(self.entity_description.key) != None and self._device.is_available and (not self._device.is_running)
+        return self._device.get_current_program_param(self.entity_description.key) != None and "type" in self._device.get_current_program_param(self.entity_description.key) and self._device.is_on and (not self._device.is_running)
 
     @callback
     def _handle_coordinator_update(self):
@@ -140,42 +140,42 @@ class HonBaseSensor(HonBaseEntity):
 class HonBaseSwitch(HonBaseSensor, SwitchEntity):
     @property
     def is_on(self):
-        return self.available and self._device.get_setting(self.entity_description.key) == 1
+        return self.available and self._device.get_current_program_param(self.entity_description.key)["value"] == 1
 
     async def async_turn_on(self, **kwargs: Any):
-        self._device.set_setting({self.entity_description.key: 1})
+        self._device.set_current_program_param(self.entity_description.key, 1)
 
     async def async_turn_off(self, **kwargs: Any):
-        self._device.set_setting({self.entity_description.key: 0})
+        self._device.set_current_program_param(self.entity_description.key, 0)
 
     def coordinator_update(self):
         if not self.available:
             self._attr_is_on = False
         else:
-            self._attr_is_on = self._device.get_setting(self.entity_description.key) == 1
+            self._attr_is_on = self._device.get_current_program_param(self.entity_description.key)["value"] == 1
 
 
 class HonBaseSelect(HonBaseSensor, SelectEntity):
     @property
     def available(self) -> bool:
-        return super().available and "options" in self._device._settings[self.entity_description.key] and len(self._device._settings[self.entity_description.key]["options"]) > 0
+        return super().available and "options" in self._device.get_current_program_param(self.entity_description.key) and "type" in self._device.get_current_program_param(self.entity_description.key) and len(self._device.get_current_program_param(self.entity_description.key)["options"]) > 0
 
     @property
     def current_option(self) -> str | None:
         if not self.available:
             return None
-        return str(self._device.get_setting(self.entity_description.key))
+        return str(self._device.get_current_program_param(self.entity_description.key)["value"])
 
     async def async_select_option(self, option: str) -> None:
-        self._device.set_setting({self.entity_description.key: str(option)})
+        self._device.set_current_program_param(self.entity_description.key, str(option))
 
     def coordinator_update(self):
         if not self.available:
             self._attr_options = []
             self._attr_current_option = None
         else:
-            self._attr_options = self._device._settings[self.entity_description.key]["options"]
-            self._attr_current_option = str(self._device.get_setting(self.entity_description.key))
+            self._attr_options = self._device.get_current_program_param(self.entity_description.key)["options"]
+            self._attr_current_option = str(self._device.get_current_program_param(self.entity_description.key)["value"])
 
 
 class HonBaseDevice(HonBaseEntity, BinarySensorEntity):

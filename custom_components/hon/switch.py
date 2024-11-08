@@ -35,7 +35,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
             description = SwitchEntityDescription(
                 key="delay",
                 name="delay",
-                entity_category=EntityCategory.CONFIG,
+                entity_category=EntityCategory.DIAGNOSTIC,
                 translation_key='delayswitch',
                 icon=default_value.get("icon", None),
             )
@@ -47,11 +47,11 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 class HonDelaySwitch(HonBaseSwitch):
     @property
     def available(self) -> bool:
-        return self._device.get_setting("delayTime") != None and self._device.is_available and (not self._device.is_running)
+        return self._device.get_current_program_param("delayTime") != None and "type" in self._device.get_current_program_param("delayTime") and self._device.is_available and (not self._device.is_running) and self._device._delay_time
 
     @property
     def is_on(self) -> bool | None:
-        return self.available and self._device.get_setting("delayTime") and int(self._device.get_setting("delayTime")) > 0
+        return self.available and int(self._device.get_current_program_param("delayTime")["value"]) > 0
 
     def set_delay(self):
         day = datetime.now()
@@ -65,20 +65,20 @@ class HonDelaySwitch(HonBaseSwitch):
         delay = int((day.replace(hour=delay_hour, minute=delay_minute, second=00) - datetime.now()).total_seconds() / 60)
         delay = math.floor(delay / 30) * 30
 
-        if int(self._device.get_setting("delayTime")) != int(delay):
-            self._device.set_setting({"delayTime": str(delay)})
+        if int(self._device.get_current_program_param("delayTime")["value"]) != int(delay):
+            self._device.set_current_program_param("delayTime", str(delay))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self.set_delay()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        self._device.set_setting({"delayTime": "0"})
+        self._device.set_current_program_param("delayTime", "0")
 
     def coordinator_update(self):
         if not self.available:
             self._attr_is_on = False
         elif self._device.get_setting("delayTime"):
-            self._attr_is_on = int(self._device.get_setting("delayTime")) > 0
+            self._attr_is_on = int(self._device.get_current_program_param("delayTime")["value"]) > 0
             if self._attr_is_on:
                 self.set_delay()
         else:

@@ -6,5 +6,8 @@
   "documentation": "https://github.com/andreadegiovine/hon",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/andreadegiovine/hon/issues",
-  "version": "0.0.5"
+  "requirements": [
+    "deep-translator==1.*"
+  ],
+  "version": "0.0.6"
 }

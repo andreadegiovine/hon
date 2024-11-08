@@ -618,6 +618,12 @@
           "program_name": {
             "name": "Program"
           },
+          "program_description": {
+            "name": "Description"
+          },
+          "program_duration": {
+            "name": "Duration"
+          },
           "spin_speed": {
             "name": "Spin speed"
           },

@@ -322,18 +322,8 @@ class HonDevice(CoordinatorEntity):
             self._manually_detergent_notify = False
             self._manually_softener_notify = False
 
-        if self._manually_softener_notify:
-            _LOGGER.error("manually_softener_notify")
-            if "machMode" in attributes:
-                _LOGGER.error("Mode")
-                _LOGGER.error(attributes["machMode"])
-            if "remainingTimeMM" in attributes:
-                _LOGGER.error("Remaining")
-                _LOGGER.error(attributes["remainingTimeMM"])
-
         if self._manually_softener_notify and "machMode" in attributes and int(attributes["machMode"]) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < 20:
-            _LOGGER.error("trig manually_softener_notify action")
-            self.send_pause_resume()
+            await self.send_pause_resume()
             await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autosoftener_manually", "autosoftener_manually"))
             self._manually_softener_notify = False
             return
@@ -387,9 +377,7 @@ class HonDevice(CoordinatorEntity):
 
 
     async def send_pause_resume(self):
-        _LOGGER.error("send_pause_resume")
         mode = self.get_data("machMode")
-        _LOGGER.error(mode)
 
         if mode not in ["2","3"]:
             return
@@ -402,10 +390,6 @@ class HonDevice(CoordinatorEntity):
             command = "resumeProgram"
             new_mode = "2"
 
-        _LOGGER.error(command)
-        _LOGGER.error(pause)
-
         result = await self._hon.send_command(self, command, {"pause": pause})
-        _LOGGER.error(result)
         if result:
             self.set_data({"machMode": new_mode})

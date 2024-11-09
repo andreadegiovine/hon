@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.helpers.entity import EntityCategory
@@ -8,6 +8,7 @@ from homeassistant.components.switch import SwitchEntityDescription
 
 from .const import DOMAIN, SENSORS_DEFAULT
 from .base import HonBaseSwitch
+from .utils import get_datetime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,15 +55,23 @@ class HonDelaySwitch(HonBaseSwitch):
         return self.available and int(self._device.get_current_program_param("delayTime")["value"]) > 0
 
     def set_delay(self):
-        day = datetime.now()
+        now = get_datetime()
+        now2 = get_datetime()
+
+        if now.tzinfo != UTC:
+            now = now.astimezone(UTC)
+            now2 = now2.astimezone(UTC)
+
+        now = now.astimezone(pytz.timezone('Europe/Rome'))
+        now2 = now2.astimezone(pytz.timezone('Europe/Rome'))
 
         delay_hour = int(self._device._delay_time.split(":")[0])
         delay_minute = int(self._device._delay_time.split(":")[1])
 
-        if int(datetime.now().strftime("%H")) > delay_hour-1:
-            day = datetime.now() + timedelta(days=1)
+        if int(now2.strftime("%H")) > delay_hour-1:
+            now = now2 + timedelta(days=1)
 
-        delay = int((day.replace(hour=delay_hour, minute=delay_minute, second=00) - datetime.now()).total_seconds() / 60)
+        delay = int((now.replace(hour=delay_hour, minute=delay_minute, second=00) - now2).total_seconds() / 60)
         delay = math.floor(delay / 30) * 30
 
         if int(self._device.get_current_program_param("delayTime")["value"]) != int(delay):

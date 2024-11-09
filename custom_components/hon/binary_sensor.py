@@ -1,12 +1,12 @@
 import logging
-from datetime import UTC, datetime, timedelta, timezone
-import pytz
+from datetime import timedelta
 
 from homeassistant.components.binary_sensor import BinarySensorEntityDescription
 from homeassistant.helpers import translation
 
 from .const import DOMAIN, SENSORS_DEFAULT
 from .base import HonBaseDevice
+from .utils import get_datetime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,7 +63,11 @@ class HonDevice(HonBaseDevice):
                             _LOGGER.error(option_setting)
                             _LOGGER.error(timing_data[option])
         if timing//60 > 0:
-            timing = str(timing//60) + ":" + str(timing%60)
+            hours = timing//60
+            minutes = timing%60
+            if minutes < 10:
+                minutes = "0" + str(minutes)
+            timing = str(hours) + ":" + str(minutes)
         else:
             timing = str(timing) + " min"
         return timing
@@ -110,7 +114,7 @@ class HonDevice(HonBaseDevice):
                 remaining = int(self._device.get_data("remainingTimeMM"))
                 value = None
                 if remaining > 0:
-                    value = datetime.now(timezone.utc).replace(second=0) + timedelta(minutes=delay + remaining)
+                    value = get_datetime().replace(second=0) + timedelta(minutes=delay + remaining)
 
                     if remaining//60 > 0:
                         remaining = str(remaining//60) + ":" + str(remaining%60)
@@ -120,11 +124,6 @@ class HonDevice(HonBaseDevice):
                     remaining: None
 
                 attributes["remaining_time"] = remaining
-
-                if (not value in [0, None]) and value.tzinfo != UTC:
-                    value = value.astimezone(UTC)
-
-                value = value.astimezone(pytz.timezone('Europe/Rome'))
                 attributes["end_time"] = value.strftime("%H:%M")
 
         if self._device.current_program_name:

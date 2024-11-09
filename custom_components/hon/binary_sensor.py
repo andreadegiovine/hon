@@ -117,7 +117,11 @@ class HonDevice(HonBaseDevice):
                     value = get_datetime().replace(second=0) + timedelta(minutes=delay + remaining)
 
                     if remaining//60 > 0:
-                        remaining = str(remaining//60) + ":" + str(remaining%60)
+                        hours = remaining//60
+                        minutes = remaining%60
+                        if minutes < 10:
+                            minutes = "0" + str(minutes)
+                        remaining = str(hours) + ":" + str(minutes)
                     else:
                         remaining = str(remaining) + " min"
                 else:

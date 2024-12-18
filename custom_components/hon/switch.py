@@ -58,13 +58,6 @@ class HonDelaySwitch(HonBaseSwitch):
         now = get_datetime()
         now2 = get_datetime()
 
-        if now.tzinfo != UTC:
-            now = now.astimezone(UTC)
-            now2 = now2.astimezone(UTC)
-
-        now = now.astimezone(pytz.timezone('Europe/Rome'))
-        now2 = now2.astimezone(pytz.timezone('Europe/Rome'))
-
         delay_hour = int(self._device._delay_time.split(":")[0])
         delay_minute = int(self._device._delay_time.split(":")[1])
 

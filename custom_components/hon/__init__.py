@@ -51,9 +51,6 @@ async def async_setup_entry(hass, entry):
         await coordinator.async_config_entry_first_refresh()
         await coordinator.device.get_programs()
 
-    for platform in PLATFORMS:
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(entry, platform)
-        )
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True

@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.components.notify import (
@@ -49,13 +50,16 @@ class HonDevice(CoordinatorEntity):
         return data[self._mac][key]
 
     def set_stored_data(self, key, value):
-        data = self._entry.data.copy()
-        if self._mac not in data:
-            data[self._mac] = {}
-        if key not in data[self._mac]:
-            data[self._mac][key] = {}
-        data[self._mac][key] = value
-        self._hass.config_entries.async_update_entry(self._entry, data=data)
+        data = self._entry.data
+        new_data = {}
+        for key in data:
+            new_data[key] = deepcopy(data[key])
+        if self._mac not in new_data:
+            new_data[self._mac] = {}
+        if key not in new_data[self._mac]:
+            new_data[self._mac][key] = {}
+        new_data[self._mac][key] = value
+        self._hass.config_entries.async_update_entry(self._entry, data=new_data)
         self._hass.config_entries._async_schedule_save()
         self._coordinator.async_update_listeners()
 

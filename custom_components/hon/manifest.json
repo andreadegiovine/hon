@@ -1,7 +1,9 @@
 {
   "domain": "hon",
   "name": "hOn (WM, TD)",
-  "codeowners": ["@andreadegiovine"],
+  "codeowners": [
+    "@andreadegiovine"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/andreadegiovine/hon",
   "iot_class": "cloud_polling",
@@ -9,5 +11,5 @@
   "requirements": [
     "deep-translator==1.*"
   ],
-  "version": "0.1.2"
+  "version": "2025.8.1"
 }

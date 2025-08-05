@@ -6,7 +6,7 @@ from homeassistant.components.notify import (
     ATTR_MESSAGE,
     ATTR_TITLE,
     DOMAIN,
-    SERVICE_NOTIFY,
+    SERVICE_PERSISTENT_NOTIFICATION,
 )
 from deep_translator import GoogleTranslator
 
@@ -217,7 +217,7 @@ class HonDevice(CoordinatorEntity):
     async def send_notify(self, message):
         data = {ATTR_TITLE: self._name}
         data[ATTR_MESSAGE] = message
-        await self._hass.services.async_call(DOMAIN, SERVICE_NOTIFY, data)
+        await self._hass.services.async_call(DOMAIN, SERVICE_PERSISTENT_NOTIFICATION, data)
 
     async def get_translation(self, string):
         translator = GoogleTranslator(source='auto', target='it')

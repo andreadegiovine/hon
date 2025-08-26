@@ -52,8 +52,8 @@ class HonDevice(CoordinatorEntity):
     def set_stored_data(self, key, value):
         data = self._entry.data
         new_data = {}
-        for key in data:
-            new_data[key] = deepcopy(data[key])
+        for data_key in data:
+            new_data[data_key] = deepcopy(data[data_key])
         if self._mac not in new_data:
             new_data[self._mac] = {}
         if key not in new_data[self._mac]:

@@ -178,7 +178,7 @@ class HonBaseSelect(HonBaseSensor, SelectEntity):
             self._attr_current_option = str(self._device.get_current_program_param(self.entity_description.key)["value"])
 
 
-class HonBaseDevice(HonBaseEntity, BinarySensorEntity):
+class HonBaseBinarySensor(HonBaseEntity, BinarySensorEntity):
     def __init__(self, coordinator, appliance, description, translations):
         super().__init__(coordinator, appliance, description)
         self._translations = translations
@@ -195,4 +195,6 @@ class HonBaseDevice(HonBaseEntity, BinarySensorEntity):
 
     def coordinator_update(self):
         """Update entity state"""
-        raise NotImplementedError
+        self._attr_is_on = False
+        if self._device.get_data(self.entity_description.key) is not None:
+            self._attr_is_on = self._device.get_data(self.entity_description.key)

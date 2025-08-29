@@ -672,6 +672,9 @@
           }
         }
       },
+      "dryFilterStatus": {
+        "name": "Filter cleaning"
+      },
       "notify": {
         "state": {
           "autosoftener_manually": "\"Auto Softener\" is not active, add softener manually and resume the program.",

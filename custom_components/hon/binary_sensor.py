@@ -5,7 +5,7 @@ from homeassistant.components.binary_sensor import BinarySensorEntityDescription
 from homeassistant.helpers import translation
 
 from .const import DOMAIN, SENSORS_DEFAULT
-from .base import HonBaseDevice
+from .base import HonBaseBinarySensor
 from .utils import get_datetime
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,12 +30,23 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
         )
         appliances.extend([HonDevice(coordinator, appliance, description, translations)])
 
+        sensors = default_value.get("binary_sensors", {})
+        for key in sensors:
+            sensor_default = sensors.get(key, {})
+            description = BinarySensorEntityDescription(
+                key=key,
+                name=key,
+                translation_key=key,
+                icon=sensor_default.get("icon", None),
+            )
+            appliances.extend([HonBaseBinarySensor(coordinator, appliance, description, translations)])
+
         await coordinator.async_request_refresh()
 
     async_add_entities(appliances)
 
 
-class HonDevice(HonBaseDevice):
+class HonDevice(HonBaseBinarySensor):
     def get_program_duration(self):
         program_data = self._device.get_program(self._device.current_program_name)
         if "timing" not in program_data:

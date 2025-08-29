@@ -23,6 +23,11 @@ SENSORS_DEFAULT = {
     },
     "td" : {
         "icon" : "mdi:tumble-dryer",
+        "binary_sensors": {
+            "dryFilterStatus": {
+                "icon": "mdi:air-filter",
+            }
+        }
     },
     "acquaplus" : {
         "icon" : "mdi:water-plus",

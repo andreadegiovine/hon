@@ -665,6 +665,9 @@
           }
         }
       },
+      "dryFilterStatus": {
+        "name": "Pulizia filtro"
+      },
       "notify": {
         "state": {
           "autosoftener_manually": "\"Ammorbidente auto\" non è attivo, aggiungi l'ammorbidente manualmente e fai riprendere il programma.",

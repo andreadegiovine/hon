@@ -197,4 +197,4 @@ class HonBaseBinarySensor(HonBaseEntity, BinarySensorEntity):
         """Update entity state"""
         self._attr_is_on = False
         if self._device.get_data(self.entity_description.key) is not None:
-            self._attr_is_on = self._device.get_data(self.entity_description.key)
+            self._attr_is_on = self._device.get_data(self.entity_description.key) == "1"

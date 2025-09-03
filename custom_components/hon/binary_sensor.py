@@ -86,7 +86,7 @@ class HonDevice(HonBaseBinarySensor):
     def coordinator_update(self):
         self._attr_is_on = self._device.is_on
 
-        attributes = {}
+        attributes = {"mac": self._device._mac}
 
         if self._attr_is_on == False:
             self._attr_extra_state_attributes = attributes

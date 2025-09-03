@@ -6,7 +6,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import translation
 
-from .const import DOMAIN, PLATFORMS
+from .const import DOMAIN, PLATFORMS, CONF_MAC, CONF_DISABLED_PROGRAMS, CONF_SOFTENER_REMAINING_TIME
 from .hon import HonConnection
 from .device import HonDevice
 
@@ -14,13 +14,18 @@ _LOGGER = logging.getLogger(__name__)
 
 HON_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_EMAIL): cv.string,
-        vol.Required(CONF_PASSWORD): cv.string,
+        vol.Required(CONF_MAC): cv.string,
+        CONF_DISABLED_PROGRAMS: vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(CONF_SOFTENER_REMAINING_TIME): int
     }
 )
 
 CONFIG_SCHEMA = vol.Schema(
-    {DOMAIN: vol.Schema(vol.All(cv.ensure_list, [HON_SCHEMA]))},
+    {
+        DOMAIN: vol.Schema(
+            vol.All(cv.ensure_list, [HON_SCHEMA])
+        )
+    },
     extra=vol.ALLOW_EXTRA,
 )
 
@@ -52,5 +57,12 @@ async def async_setup_entry(hass, entry):
         await coordinator.device.get_programs()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    return True
+
+async def async_setup(hass, config):
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["configuration_yaml"] = config.get(DOMAIN)
 
     return True

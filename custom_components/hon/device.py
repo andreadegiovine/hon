@@ -10,7 +10,7 @@ from homeassistant.components.notify import (
 )
 from deep_translator import GoogleTranslator
 
-from .const import APPLIANCE_DEFAULT_NAME
+from .const import DOMAIN, APPLIANCE_DEFAULT_NAME, CONF_MAC, CONF_SOFTENER_REMAINING_TIME
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +42,15 @@ class HonDevice(CoordinatorEntity):
         self._manually_softener_notify = False
         self._low_detergent_notify = False
         self._low_softener_notify = False
+
+    def get_yaml_config(self, key):
+        yaml = self._hass.data[DOMAIN]["configuration_yaml"]
+        if not yaml:
+            return None
+        for item in yaml:
+            if item[CONF_MAC] == self._mac and key in item:
+                return item[key]
+        return None
 
     def get_stored_data(self, key):
         data = self._entry.data
@@ -326,7 +335,10 @@ class HonDevice(CoordinatorEntity):
             self._manually_detergent_notify = False
             self._manually_softener_notify = False
 
-        if self._manually_softener_notify and "machMode" in attributes and int(attributes["machMode"]) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < 20:
+        softener_remaining_time = 20
+        if self.get_yaml_config(CONF_SOFTENER_REMAINING_TIME):
+            softener_remaining_time = self.get_yaml_config(CONF_SOFTENER_REMAINING_TIME)
+        if self._manually_softener_notify and "machMode" in attributes and int(attributes["machMode"]) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < softener_remaining_time:
             await self.send_pause_resume()
             await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autosoftener_manually", "autosoftener_manually"))
             self._manually_softener_notify = False

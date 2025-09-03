@@ -9,6 +9,9 @@ CONF_ID_TOKEN = "token"
 CONF_COGNITO_TOKEN = "cognito_token"
 CONF_REFRESH_TOKEN = "refresh_token"
 CONF_FRAMEWORK = "framework"
+CONF_MAC = "mac"
+CONF_DISABLED_PROGRAMS = "disabled_programs"
+CONF_SOFTENER_REMAINING_TIME = "softener_remaining_time"
 
 PLATFORMS = [
     "select",

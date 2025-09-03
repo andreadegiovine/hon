@@ -3,7 +3,7 @@ import logging
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.components.select import SelectEntityDescription
 
-from .const import DOMAIN, SENSORS_DEFAULT
+from .const import DOMAIN, SENSORS_DEFAULT, CONF_DISABLED_PROGRAMS
 from .base import HonBaseSelect
 
 _LOGGER = logging.getLogger(__name__)
@@ -101,4 +101,8 @@ class HonProgramSelect(HonBaseSelect):
         if not self.available:
             self._attr_options = []
         else:
-            self._attr_options = list(self._device.programs)
+            programs = list(self._device.programs)
+            disabled_programs = self._device.get_yaml_config(CONF_DISABLED_PROGRAMS)
+            if disabled_programs:
+                programs = [x for x in programs if x not in disabled_programs]
+            self._attr_options = programs

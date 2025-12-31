@@ -1,5 +1,7 @@
 import logging
 from copy import deepcopy
+import os
+import json
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.components.notify import (
@@ -43,6 +45,8 @@ class HonDevice(CoordinatorEntity):
         self._low_detergent_notify = False
         self._low_softener_notify = False
 
+        self._cache = {}
+
     def get_yaml_config(self, key):
         yaml = self._hass.data[DOMAIN]["configuration_yaml"]
         if not yaml:
@@ -51,6 +55,30 @@ class HonDevice(CoordinatorEntity):
             if item[CONF_MAC] == self._mac and key in item:
                 return item[key]
         return None
+
+    def set_storage_data(self, key: str, value):
+        hass_config_path = self._hass.config.path()
+        storage_path = os.path.join(hass_config_path, ".storage", DOMAIN)
+        if not os.path.isdir(storage_path):
+            os.mkdir(storage_path)
+        data_path = os.path.join(storage_path, f"{self._mac}_{key}.json")
+        if os.path.isfile(data_path):
+            os.remove(data_path)
+        with open(data_path, 'w', encoding='utf-8') as f:
+            json.dump(value, f, ensure_ascii=False, indent=4)
+
+    def get_storage_data(self, key: str):
+        if key in self._cache and self._cache[key]:
+            return self._cache[key]
+        hass_config_path = self._hass.config.path()
+        storage_path = os.path.join(hass_config_path, ".storage", DOMAIN)
+        data_path = os.path.join(storage_path, f"{self._mac}_{key}.json")
+        value = None
+        if os.path.isdir(storage_path) and os.path.isfile(data_path):
+            with open(data_path) as f:
+                value = json.load(f)
+        self._cache[key] = value
+        return value
 
     def get_stored_data(self, key):
         data = self._entry.data
@@ -74,7 +102,12 @@ class HonDevice(CoordinatorEntity):
 
     @property
     def settings(self):
-        return self.get_stored_data("settings")
+        settings = self.get_storage_data("settings")
+        stored_settings = self.get_stored_data("settings")
+        for setting in stored_settings:
+            if setting in settings:
+                settings[setting]["value"] = stored_settings[setting]
+        return settings
 
     def get_setting(self, key):
         if key not in self.settings:
@@ -82,10 +115,10 @@ class HonDevice(CoordinatorEntity):
         return self.settings[key]
 
     def update_setting(self, key, value):
-        data = self.settings
-        if key not in data:
-            data[key] = {}
-        data[key]["value"] = value
+        if key not in self.settings:
+            return
+        data = self.get_stored_data("settings")
+        data[key] = value
         self.set_stored_data("settings", data)
 
     @property
@@ -106,19 +139,18 @@ class HonDevice(CoordinatorEntity):
 
     @property
     def programs(self):
-        return self.get_stored_data("programs")
+        programs = self.get_storage_data("programs")
+        stored_programs = self.get_stored_data("programs")
+        for program in stored_programs:
+            for param in stored_programs[program]:
+                if program in programs and param in programs[program]["params"]:
+                    programs[program]["params"][param]["value"] = stored_programs[program][param]
+        return programs
 
     def get_program(self, key):
         if key not in self.programs:
             return None
         return self.programs[key]
-
-    def update_program(self, key, value):
-        if key not in self.programs:
-            return
-        data = self.programs
-        data[key] = value
-        self.set_stored_data("programs", data)
 
     def get_program_params(self, key):
         data = self.get_program(key)
@@ -126,11 +158,20 @@ class HonDevice(CoordinatorEntity):
             return None
         return data["params"]
 
-    def update_program_params(self, name, key, value):
-        data = self.get_program(name)
-        if data == None or (not "params" in data) or (not key in data["params"]) or key in ["delayTime", "lang", "waterHard"]:
+    def update_program(self, key, value):
+        if key not in self.programs:
             return
-        data["params"][key]["value"] = value
+        data = self.get_stored_data("programs")
+        data[key] = value
+        self.set_stored_data("programs", data)
+
+    def update_program_params(self, name, key, value):
+        if name not in self.programs or key not in self.programs[name]["params"]:
+            return
+        data = {}
+        if name in self.get_stored_data("programs"):
+            data = self.get_stored_data("programs")[name]
+        data[key] = value
         self.update_program(name, data)
 
     @property
@@ -240,13 +281,13 @@ class HonDevice(CoordinatorEntity):
             default_value = int(stored_configs["value"])
         elif "defaultValue" in configs:
             default_value = int(configs["defaultValue"])
-        if configs["typology"] == "range" and ("maximumValue" in configs):
+        if configs["typology"].strip() == "range" and ("maximumValue" in configs):
             if int(configs["minimumValue"]) == 0 and (int(configs["maximumValue"]) == 1 or int(configs["maximumValue"]) == int(configs["incrementValue"])):
                 result = {"type": "switch", "value": default_value}
             else:
                 options = list(range(int(configs["minimumValue"]), (int(configs["maximumValue"])+int(configs["incrementValue"])), int(configs["incrementValue"])))
                 result = {"type": "select", "value": default_value, "options": list(map(str, options))}
-        elif configs["typology"] == "enum":
+        elif configs["typology"].strip() == "enum":
             result = {"type": "select", "value": default_value, "options": list(map(str, configs["enumValues"]))}
         elif "mandatory" in configs and "fixedValue" in configs:
             result = {"value": int(configs["fixedValue"])}
@@ -255,42 +296,48 @@ class HonDevice(CoordinatorEntity):
         return result
 
     async def get_programs(self):
-        commands = await self._hon.get_programs(self._appliance)
-        if "startProgram" not in commands:
-            return
-        stored_programs = self.get_stored_data("programs")
-        stored_settings = self.get_stored_data("settings")
-        programs = {}
-        settings = {}
-        for program in commands["startProgram"]:
-            program_attr = commands["startProgram"][program]
-            program_name = program.split(".")[-1].lower()
-            if program_name.endswith("_steam") or program_name.find("_dash_") != -1:
-                continue
-            program_params = {}
-            for param in program_attr["parameters"]:
-                configs = program_attr["parameters"][param]
-                stored_configs = None
-                if (param in ["delayTime", "lang", "waterHard"]):
-                    if param not in settings:
-                        if param in stored_settings:
-                            stored_configs = stored_settings[param]
-                        settings[param] = self.get_param_config(param, configs, stored_configs)
-                    program_params[param] = {}
+        programs = self.get_storage_data("programs")
+        settings = self.get_storage_data("settings")
+        if not programs or not settings:
+            commands = await self._hon.get_programs(self._appliance)
+            if "startProgram" not in commands:
+                return
+            # stored_programs = self.get_stored_data("programs")
+            # stored_settings = self.get_stored_data("settings")
+            programs = {}
+            settings = {}
+            for program in commands["startProgram"]:
+                program_attr = commands["startProgram"][program]
+                program_name = program.split(".")[-1].lower()
+                if program_name.endswith("_steam") or program_name.find("_dash_") != -1:
                     continue
-                if (program_name in stored_programs) and ("params" in stored_programs[program_name]) and (param in stored_programs[program_name]["params"]):
-                    stored_configs = stored_programs[program_name]["params"][param]
-                program_params[param] = self.get_param_config(param, configs, stored_configs)
-            if (program_name in stored_programs) and ("info" in stored_programs[program_name]):
-                description = stored_programs[program_name]["info"]
-            else:
+                program_params = {}
+                for param in program_attr["parameters"]:
+                    configs = program_attr["parameters"][param]
+                    stored_configs = None
+                    if (param in ["delayTime", "lang", "waterHard"]):
+                        if param not in settings:
+                            # if param in stored_settings:
+                            #     stored_configs = stored_settings[param]
+                            # settings[param] = self.get_param_config(param, configs, stored_configs)
+                            settings[param] = self.get_param_config(param, configs)
+                        program_params[param] = {}
+                        continue
+                    # if (program_name in stored_programs) and ("params" in stored_programs[program_name]) and (param in stored_programs[program_name]["params"]):
+                    #     stored_configs = stored_programs[program_name]["params"][param]
+                    # program_params[param] = self.get_param_config(param, configs, stored_configs)
+                    program_params[param] = self.get_param_config(param, configs)
+                # if (program_name in stored_programs) and ("info" in stored_programs[program_name]):
+                #     description = stored_programs[program_name]["info"]
+                # else:
                 description = await self.get_translation(program_attr["description"])
-            program_data = {"info": description, "params": program_params}
-            if "remainingTimes" in program_attr:
-                program_data["timing"] = program_attr["remainingTimes"]
-            programs[program_name] = program_data
-        self.set_stored_data("programs", programs)
-        self.set_stored_data("settings", settings)
+                program_data = {"info": description, "params": program_params}
+                if "remainingTimes" in program_attr:
+                    program_data["timing"] = program_attr["remainingTimes"]
+                programs[program_name] = program_data
+            self.set_storage_data("programs", programs)
+            self.set_storage_data("settings", settings)
+
         current_program = list(programs)[0]
         if self.current_program_name:
             current_program = self.current_program_name

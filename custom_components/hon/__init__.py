@@ -60,9 +60,22 @@ async def async_setup_entry(hass, entry):
 
     return True
 
+
 async def async_setup(hass, config):
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["configuration_yaml"] = config.get(DOMAIN)
+
+    return True
+
+
+async def async_migrate_entry(hass, config):
+    if config.version == 1 and config.minor_version < 1:
+        _LOGGER.debug("Update to 1.1")
+        hon = hass.data[DOMAIN][config.unique_id]
+        for appliance in hon.appliances:
+            coordinator = await hon.async_get_coordinator(appliance)
+            coordinator.device.set_stored_data("settings", {})
+            coordinator.device.set_stored_data("programs", {})
 
     return True

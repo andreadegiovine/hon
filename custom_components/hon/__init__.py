@@ -70,11 +70,15 @@ async def async_setup(hass, config):
 
 
 async def async_migrate_entry(hass, config):
-    if config.version == 1 and config.minor_version < 1:
-        _LOGGER.debug("Update to 1.1")
-        hon = hass.data[DOMAIN][config.unique_id]
+    _LOGGER.debug(f"Current version: {config.version}.{config.minor_version}")
+    if config.version == 1 and config.minor_version < 2:
+        _LOGGER.debug("Update to 1.2")
+        hon = HonConnection(hass, config)
+        await hon.async_authorize()
+        translations = await translation.async_get_translations(hass, hass.config.language, "entity")
         for appliance in hon.appliances:
             coordinator = await hon.async_get_coordinator(appliance)
+            coordinator.device = HonDevice(config, hon, coordinator, appliance, translations)
             coordinator.device.set_stored_data("settings", {})
             coordinator.device.set_stored_data("programs", {})
 

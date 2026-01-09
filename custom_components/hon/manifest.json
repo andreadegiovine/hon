@@ -11,5 +11,5 @@
   "requirements": [
     "deep-translator==1.*"
   ],
-  "version": "2026.1.1"
+  "version": "2026.1.2"
 }

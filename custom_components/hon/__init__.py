@@ -71,15 +71,27 @@ async def async_setup(hass, config):
 
 async def async_migrate_entry(hass, config):
     _LOGGER.debug(f"Current version: {config.version}.{config.minor_version}")
+
     if config.version == 1 and config.minor_version < 2:
         _LOGGER.debug("Update to 1.2")
-        hon = HonConnection(hass, config)
-        await hon.async_authorize()
-        translations = await translation.async_get_translations(hass, hass.config.language, "entity")
-        for appliance in hon.appliances:
-            coordinator = await hon.async_get_coordinator(appliance)
-            coordinator.device = HonDevice(config, hon, coordinator, appliance, translations)
-            coordinator.device.set_stored_data("settings", {})
-            coordinator.device.set_stored_data("programs", {})
+        for key in config.data:
+            if isinstance(config.data[key], dict):
+                if "settings" in config.data[key]:
+                    config.data[key]["settings"] = {}
+                if "programs" in config.data[key]:
+                    config.data[key]["programs"] = {}
+        hass.config_entries.async_update_entry(config, data=config.data, minor_version=2)
+
+    if config.version == 1 and config.minor_version < 3:
+        _LOGGER.debug("Update to 1.3")
+        for key in config.data:
+            if isinstance(config.data[key], dict):
+                if "settings" in config.data[key]:
+                    del config.data[key]["settings"]
+                if "programs" in config.data[key]:
+                    del config.data[key]["programs"]
+                if "options" in config.data[key]:
+                    config.data[key]["options"] = {}
+        hass.config_entries.async_update_entry(config, data=config.data, minor_version=3)
 
     return True

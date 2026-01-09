@@ -13,6 +13,13 @@ CONF_MAC = "mac"
 CONF_DISABLED_PROGRAMS = "disabled_programs"
 CONF_SOFTENER_REMAINING_TIME = "softener_remaining_time"
 
+CONF_PROGRAMS = "programs"
+CONF_SETTINGS = "settings"
+
+CONF_CURRENT_PROGRAM = "current_program"
+CONF_PROGRAMS_SETTINGS = "programs_settings"
+CONF_GLOBAL_SETTINGS = "global_settings"
+
 PLATFORMS = [
     "select",
     "switch",

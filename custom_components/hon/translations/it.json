@@ -64,6 +64,9 @@
       },
       "pause": {
         "name": "Pausa / Riprendi"
+      },
+      "reload": {
+        "name": "Ricarica programmi"
       }
     },
     "select": {

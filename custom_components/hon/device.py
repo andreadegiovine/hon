@@ -12,7 +12,17 @@ from homeassistant.components.notify import (
 from homeassistant.components.notify import DOMAIN as NOTIFICATION_DOMAIN
 from deep_translator import GoogleTranslator
 
-from .const import DOMAIN, APPLIANCE_DEFAULT_NAME, CONF_MAC, CONF_SOFTENER_REMAINING_TIME
+from .const import (
+    DOMAIN,
+    APPLIANCE_DEFAULT_NAME,
+    CONF_MAC,
+    CONF_SOFTENER_REMAINING_TIME,
+    CONF_PROGRAMS,
+    CONF_SETTINGS,
+    CONF_CURRENT_PROGRAM,
+    CONF_PROGRAMS_SETTINGS,
+    CONF_GLOBAL_SETTINGS
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +76,7 @@ class HonDevice(CoordinatorEntity):
             os.remove(data_path)
         with open(data_path, 'w', encoding='utf-8') as f:
             json.dump(value, f, ensure_ascii=False, indent=4)
+        del self._cache[key]
 
     def get_storage_data(self, key: str):
         if key in self._cache and self._cache[key]:
@@ -80,30 +91,39 @@ class HonDevice(CoordinatorEntity):
         self._cache[key] = value
         return value
 
-    def get_stored_data(self, key):
-        data = self._entry.data
+    def copy_dict(self, data):
+        new_data = {}
+        for data_key in data:
+            if isinstance(data[data_key], dict):
+                new_data[data_key] = self.copy_dict(data[data_key])
+            else:
+                new_data[data_key] = deepcopy(data[data_key])
+        return new_data
+
+    def get_entry_data(self):
+        return self.copy_dict(self._entry.data)
+
+    def get_config_data(self, key):
+        data = self.get_entry_data()
         if self._mac not in data or key not in data[self._mac]:
             return {}
         return data[self._mac][key]
 
     def set_stored_data(self, key, value):
-        data = self._entry.data
-        new_data = {}
-        for data_key in data:
-            new_data[data_key] = deepcopy(data[data_key])
-        if self._mac not in new_data:
-            new_data[self._mac] = {}
-        if key not in new_data[self._mac]:
-            new_data[self._mac][key] = {}
-        new_data[self._mac][key] = value
-        self._hass.config_entries.async_update_entry(self._entry, data=new_data)
-        self._hass.config_entries._async_schedule_save()
-        self._coordinator.async_update_listeners()
+        data = self.get_entry_data()
+        if self._mac not in data:
+            data[self._mac] = {}
+        if key not in data[self._mac]:
+            data[self._mac][key] = {}
+        data[self._mac][key] = value
+        self._hass.config_entries.async_update_entry(self._entry, data=data)
+        # self._hass.config_entries._async_schedule_save()
+        # self._coordinator.async_update_listeners()
 
     @property
     def settings(self):
-        settings = self.get_storage_data("settings")
-        stored_settings = self.get_stored_data("settings")
+        settings = self.get_storage_data(CONF_SETTINGS)
+        stored_settings = self.get_config_data(CONF_GLOBAL_SETTINGS)
         for setting in stored_settings:
             if setting in settings:
                 settings[setting]["value"] = stored_settings[setting]
@@ -117,30 +137,14 @@ class HonDevice(CoordinatorEntity):
     def update_setting(self, key, value):
         if key not in self.settings:
             return
-        data = self.get_stored_data("settings")
+        data = self.get_config_data(CONF_GLOBAL_SETTINGS)
         data[key] = value
-        self.set_stored_data("settings", data)
-
-    @property
-    def options(self):
-        return self.get_stored_data("options")
-
-    def get_option(self, key):
-        if key not in self.options:
-            return None
-        return self.options[key]
-
-    def update_option(self, key, value):
-        data = self.options
-        if key not in data:
-            data[key] = {}
-        data[key] = value
-        self.set_stored_data("options", data)
+        self.set_stored_data(CONF_GLOBAL_SETTINGS, data)
 
     @property
     def programs(self):
-        programs = self.get_storage_data("programs")
-        stored_programs = self.get_stored_data("programs")
+        programs = self.get_storage_data(CONF_PROGRAMS)
+        stored_programs = self.get_config_data(CONF_PROGRAMS_SETTINGS)
         for program in stored_programs:
             for param in stored_programs[program]:
                 if program in programs and param in programs[program]["params"]:
@@ -161,28 +165,28 @@ class HonDevice(CoordinatorEntity):
     def update_program(self, key, value):
         if key not in self.programs:
             return
-        data = self.get_stored_data("programs")
+        data = self.get_config_data(CONF_PROGRAMS_SETTINGS)
         data[key] = value
-        self.set_stored_data("programs", data)
+        self.set_stored_data(CONF_PROGRAMS_SETTINGS, data)
 
     def update_program_params(self, name, key, value):
         if name not in self.programs or key not in self.programs[name]["params"]:
             return
         data = {}
-        if name in self.get_stored_data("programs"):
-            data = self.get_stored_data("programs")[name]
+        if name in self.get_config_data(CONF_PROGRAMS_SETTINGS):
+            data = self.get_config_data(CONF_PROGRAMS_SETTINGS)[name]
         data[key] = value
         self.update_program(name, data)
 
     @property
     def current_program_name(self):
         result = None
-        if self.get_option("current_program"):
-            result = self.get_option("current_program")
+        if self.get_config_data(CONF_CURRENT_PROGRAM):
+            result = self.get_config_data(CONF_CURRENT_PROGRAM)
         return result
 
     def set_current_program(self, name):
-        self.update_option("current_program", name)
+        self.set_stored_data(CONF_CURRENT_PROGRAM, name)
 
     @property
     def current_program_params(self):
@@ -296,14 +300,12 @@ class HonDevice(CoordinatorEntity):
         return result
 
     async def get_programs(self):
-        programs = self.get_storage_data("programs")
-        settings = self.get_storage_data("settings")
+        programs = self.get_storage_data(CONF_PROGRAMS)
+        settings = self.get_storage_data(CONF_SETTINGS)
         if not programs or not settings:
             commands = await self._hon.get_programs(self._appliance)
             if "startProgram" not in commands:
                 return
-            # stored_programs = self.get_stored_data("programs")
-            # stored_settings = self.get_stored_data("settings")
             programs = {}
             settings = {}
             for program in commands["startProgram"]:
@@ -314,22 +316,12 @@ class HonDevice(CoordinatorEntity):
                 program_params = {}
                 for param in program_attr["parameters"]:
                     configs = program_attr["parameters"][param]
-                    stored_configs = None
                     if (param in ["delayTime", "lang", "waterHard"]):
                         if param not in settings:
-                            # if param in stored_settings:
-                            #     stored_configs = stored_settings[param]
-                            # settings[param] = self.get_param_config(param, configs, stored_configs)
                             settings[param] = self.get_param_config(param, configs)
                         program_params[param] = {}
                         continue
-                    # if (program_name in stored_programs) and ("params" in stored_programs[program_name]) and (param in stored_programs[program_name]["params"]):
-                    #     stored_configs = stored_programs[program_name]["params"][param]
-                    # program_params[param] = self.get_param_config(param, configs, stored_configs)
                     program_params[param] = self.get_param_config(param, configs)
-                # if (program_name in stored_programs) and ("info" in stored_programs[program_name]):
-                #     description = stored_programs[program_name]["info"]
-                # else:
                 description = await self.get_translation(program_attr["description"])
                 program_data = {"info": description, "params": program_params}
                 if "remainingTimes" in program_attr:

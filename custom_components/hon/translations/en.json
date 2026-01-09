@@ -64,6 +64,9 @@
       },
       "pause": {
         "name": "Pause / Resume"
+      },
+      "reload": {
+        "name": "Reload Programs"
       }
     },
     "select": {

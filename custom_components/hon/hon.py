@@ -1,10 +1,10 @@
 import logging
 import aiohttp
 import secrets
+import base64
+import hashlib
 import json
-import re
 import time
-from urllib import parse
 from datetime import datetime
 
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
@@ -79,130 +79,94 @@ class HonConnection:
         self._coordinator_dict[mac] = coordinator
         return coordinator
 
-
-    async def async_get_frontdoor_url(self, error_code=0):
-
-        data = (
-            "message=%7B%22actions%22%3A%5B%7B%22id%22%3A%2279%3Ba%22%2C%22descriptor%22%3A%22apex%3A%2F%2FLightningLoginCustomController%2FACTION%24login%22%2C%22callingDescriptor%22%3A%22markup%3A%2F%2Fc%3AloginForm%22%2C%22params%22%3A%7B%22username%22%3A%22"
-            + parse.quote(self._email)
-            + "%22%2C%22password%22%3A%22"
-            + parse.quote(self._password)
-            + "%22%2C%22startUrl%22%3A%22%22%7D%7D%5D%7D&aura.context=%7B%22mode%22%3A%22PROD%22%2C%22fwuid%22%3A%22"
-            + parse.quote(self._framework)
-            + "%22%2C%22app%22%3A%22siteforce%3AloginApp2%22%2C%22loaded%22%3A%7B%22APPLICATION%40markup%3A%2F%2Fsiteforce%3AloginApp2%22%3A%22YtNc5oyHTOvavSB9Q4rtag%22%7D%2C%22dn%22%3A%5B%5D%2C%22globals%22%3A%7B%7D%2C%22uad%22%3Afalse%7D&aura.pageURI=%2FSmartHome%2Fs%2Flogin%2F%3Flanguage%3Dfr&aura.token=null"
+    @staticmethod
+    def _generate_pkce_pair():
+        verifier = (
+            base64.urlsafe_b64encode(secrets.token_bytes(64)).rstrip(b"=").decode()
         )
+        digest = hashlib.sha256(verifier.encode()).digest()
+        challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+        return verifier, challenge
 
+    async def _get_session_id(self, code_challenge):
+        params = {
+            "username": self._email,
+            "password": self._password,
+            "code_challenge": code_challenge,
+        }
+        async with self._session.get(
+                f"{API_URL}/ciam/authorize", params=params
+        ) as response:
+            if response.status != 200:
+                _LOGGER.error("Unable to get session_id: " + str(response.status))
+                _LOGGER.error(params)
+                _LOGGER.error(response)
+                return ""
+            session_id = (await response.json()).get("session_id", "")
+            if not session_id:
+                _LOGGER.error("session_id missing from /ciam/authorize response")
+            return session_id
+
+    async def _get_tokens(self, session_id, code_verifier):
         async with self._session.post(
-            f"{AUTH_API}/s/sfsites/aura?r=3&other.LightningLoginCustom.login=1",
-            headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
-            data=data,
-        ) as resp:
-            if resp.status != 200:
-                _LOGGER.error("Unable to connect to the login service: " + str(resp.status))
+                f"{API_URL}/ciam/token",
+                json={"session_id": session_id, "code_verifier": code_verifier},
+        ) as response:
+            if response.status != 200:
+                _LOGGER.error("Unable to get tokens: " + str(response.status))
                 return False
-
-            text = await resp.text()
-            try:
-                json_data = json.loads(text)
-                self._frontdoor_url = json_data["events"][0]["attributes"]["values"]["url"]
-            except:
-                # Framework must be updated
-                if text.find("clientOutOfSync") > 0 and error_code != 2:
-                    start = text.find("Expected: ") + 10
-                    end = text.find(" ", start)
-                    _LOGGER.debug("Framework update from ["+ self._framework+ "] to ["+ text[start:end]+ "]")
-                    self._framework = text[start:end]
-                    return await self.async_get_frontdoor_url(2)
-                _LOGGER.error("Unable to retreive the frontdoor URL. Message: " + text)
-                return 1
-
-        if error_code == 2 and self._entry != None:
-            # Update Framework
-            data = {**self._entry.data}
-            data[CONF_FRAMEWORK] = self._framework
-            self._hass.config_entries.async_update_entry(self._entry, data=data)
-
-        return 0
+            tokens = (await response.json()).get("tokens", {})
+            self._id_token = tokens.get("id_token", "")
+            self._cognitoToken = tokens.get("cognito_token", "")
+            self._refresh_token = tokens.get("refresh_token", "")
+            if not (self._id_token and self._cognitoToken):
+                _LOGGER.error("Tokens missing from /ciam/token response")
+                return False
+            return True
 
     async def async_authorize(self):
+        self._session.cookie_jar.clear()
 
-        if await self.async_get_frontdoor_url(0) == 1:
+        code_verifier, code_challenge = self._generate_pkce_pair()
+
+        session_id = await self._get_session_id(code_challenge)
+        if not session_id:
+            _LOGGER.error("Can't get session id")
             return False
 
-        async with self._session.get(self._frontdoor_url) as resp:
-            if resp.status != 200:
-                _LOGGER.error("Unable to connect to the login service: " + str(resp.status))
-                return False
-            await resp.text()
+        if not await self._get_tokens(session_id, code_verifier):
+            _LOGGER.error("Can't get api tokens")
+            return False
 
-        url = f"{AUTH_API}/apex/ProgressiveLogin?retURL=%2FSmartHome%2Fapex%2FCustomCommunitiesLanding"
-        async with self._session.get(url) as resp:
-            await resp.text()
-            
-        url = f"{AUTH_API}/services/oauth2/authorize?response_type=token+id_token&client_id=3MVG9QDx8IX8nP5T2Ha8ofvlmjLZl5L_gvfbT9.HJvpHGKoAS_dcMN8LYpTSYeVFCraUnV.2Ag1Ki7m4znVO6&redirect_uri=hon%3A%2F%2Fmobilesdk%2Fdetect%2Foauth%2Fdone&display=touch&scope=api%20openid%20refresh_token%20web&nonce=82e9f4d1-140e-4872-9fad-15e25fbf2b7c"
-        async with self._session.get(url) as resp:
-            text = await resp.text()
-            array = []
-            try:
-                array = text.split("'", 2)
-
-                if( len(array) == 1 ):
-                    #Implement a second way to get the token value
-                    m = re.search('id_token\=(.+?)&', text)
-                    if m:
-                        self._id_token = m.group(1)
-                    else:
-                        _LOGGER.error("Unable to get [id_token] during authorization process (tried both options). Full response [" + text + "]")
-                        return False
-                else:
-                    params = parse.parse_qs(array[1])
-                    self._id_token = params["id_token"][0]
-            except:
-                _LOGGER.error("Unable to get [id_token] during authorization process. Full response [" + text + "]")
-                return False
-
-        post_headers = {"id-token": self._id_token}
-        data = {
-           "os": OS,
-           "osVersion": OS_VERSION,
-           "appVersion": APP_VERSION,
-           "deviceModel": DEVICE_MODEL,
-           "mobileId": self._mobile_id
-       }
-
-        async with self._session.post(f"{API_URL}/auth/v1/login", headers=post_headers, json=data) as resp:
+        # Carica gli appliance dal nuovo endpoint unified-api
+        url = f"{API_URL}/unified-api/v1/view/appliance-list"
+        payload = {"deviceId": self._mobile_id}
+        async with self._session.post(url, headers=self._headers, json=payload) as resp:
             try:
                 json_data = await resp.json()
-                self._cognitoToken = json_data["cognitoUser"]["Token"]
-            except:
-                text = await resp.text()
-                _LOGGER.error("hOn Invalid Data ["+ str(resp.text()) + "] after sending command ["+ str(data)+ "] with headers [" + str(post_headers) + "]. Response: " + text)
+            except Exception:
+                _LOGGER.error("hOn Invalid Data after GET appliance-list")
                 return False
 
-
-        url = f"{API_URL}/commands/v1/appliance"
-        async with self._session.get(url,headers=self._headers) as resp:
-            try:
-                json_data = await resp.json()
-            except:
-                _LOGGER.error("hOn Invalid Data ["+ str(resp.text()) + "] after GET [" + url + "]")
-                return False
-
-            self._appliances = json_data["payload"]["appliances"]
+            self._appliances = (
+                json_data.get("modules", {})
+                .get("applianceList", {})
+                .get("payload", {})
+                .get("appliances", [])
+            )
             _LOGGER.debug(f"All appliances: {self._appliances}")
 
             ''' Remove appliances with no mac'''
-            self._appliances = [appliance for appliance in self._appliances if "macAddress" in appliance]
+            self._appliances = [a for a in self._appliances if "macAddress" in a]
 
             ''' Remove appliances with no applianceTypeId'''
-            self._appliances = [appliance for appliance in self._appliances if "applianceTypeId" in appliance]
+            self._appliances = [a for a in self._appliances if "applianceTypeId" in a]
 
             ''' Remove not WM or TD appliances'''
-            self._appliances = [appliance for appliance in self._appliances if appliance["applianceTypeName"] in ['WM','TD']]
-    
+            self._appliances = [a for a in self._appliances if a.get("applianceTypeName") in ['WM', 'TD']]
+
         self._start_time = time.time()
         return True
-
 
     async def get_programs(self, appliance):
         params = {

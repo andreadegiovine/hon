@@ -105,7 +105,7 @@ SENSORS_DEFAULT = {
 
 AUTH_API        = "https://account2.hon-smarthome.com/SmartHome"
 API_URL         = "https://api-iot.he.services"
-APP_VERSION     = "2.10.6"
+APP_VERSION     = "2.27.9"
 OS_VERSION      = "15.7.1"
 OS              = "ios"
 DEVICE_MODEL    = "iphonexs"

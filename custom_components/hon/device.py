@@ -335,12 +335,12 @@ class HonDevice(CoordinatorEntity):
             current_program = self.current_program_name
         self.set_current_program(current_program)
 
-    async def get_context(self):
-        data = await self._hon.get_context(self)
-
+    async def update_data(self, data):
         attributes = {}
 
-        for name, values in data.pop("shadow", {'NA': 0}).get("parameters").items():
+        _LOGGER.info(data)
+
+        for name, values in data.items():
             attributes[name] = values["parNewVal"]
 
             if name == "prPhase":
@@ -367,8 +367,6 @@ class HonDevice(CoordinatorEntity):
                     if attributes[name] in ["8","12","17"]: # Unknown
                         attributes[name] = "8"
 
-        attributes["lastConnEvent"] = data["lastConnEvent"]["category"]
-
         if "machMode" in attributes and int(attributes["machMode"]) == 7 and self.get_data("machMode") != None and int(self.get_data("machMode")) == 2:
             await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.finished", "finished"))
             self._manually_detergent_notify = False
@@ -384,6 +382,15 @@ class HonDevice(CoordinatorEntity):
             return
 
         self.set_data(attributes)
+
+
+    async def get_status(self):
+        result = await self._hon.get_status(self)
+        data = result.pop("shadow", {'NA': 0}).get("parameters")
+        data["lastConnEvent"] = {
+            "parNewVal": result["lastConnEvent"]["category"]
+        }
+        await self.update_data(data)
 
     async def send_start(self):
         if (not self.current_program_name) or (not self.current_program_settings):
@@ -416,17 +423,17 @@ class HonDevice(CoordinatorEntity):
             self._manually_softener_notify = True
 
         result = await self._hon.send_command(self, "startProgram", params, self.current_program_name)
-        if result:
-            new_mode = "2"
-            if int(self.current_program_settings["delayTime"]) > 0:
-                new_mode = "4"
-            self.set_data({"machMode": new_mode})
+        # if result:
+        #     new_mode = "2"
+        #     if int(self.current_program_settings["delayTime"]) > 0:
+        #         new_mode = "4"
+        #     self.set_data({"machMode": new_mode})
 
 
     async def send_stop(self):
         result = await self._hon.send_command(self, "stopProgram", {"onOffStatus": "0"})
         if result:
-            self.set_data({"machMode": "1"})
+            # self.set_data({"machMode": "1"})
             self._manually_detergent_notify = False
             self._manually_softener_notify = False
 
@@ -446,5 +453,5 @@ class HonDevice(CoordinatorEntity):
             new_mode = "2"
 
         result = await self._hon.send_command(self, command, {"pause": pause})
-        if result:
-            self.set_data({"machMode": new_mode})
+        # if result:
+        #     self.set_data({"machMode": new_mode})

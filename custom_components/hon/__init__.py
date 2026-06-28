@@ -51,12 +51,15 @@ async def async_setup_entry(hass, entry):
     translations = await translation.async_get_translations(hass, hass.config.language, "entity")
 
     for appliance in hon.appliances:
-        coordinator = await hon.async_get_coordinator(appliance)
+        coordinator = hon.async_get_coordinator(appliance)
         coordinator.device = HonDevice(entry, hon, coordinator, appliance, translations)
-        await coordinator.async_config_entry_first_refresh()
-        await coordinator.device.get_programs()
+        # await coordinator.device.get_status()
+        # await coordinator.async_config_entry_first_refresh()
+        # await coordinator.device.get_programs()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    await hon.start_mqtt()
 
     return True
 

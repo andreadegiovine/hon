@@ -109,6 +109,8 @@ APP_VERSION     = "2.27.9"
 OS_VERSION      = "15.7.1"
 OS              = "ios"
 DEVICE_MODEL    = "iphonexs"
+AWS_ENDPOINT = "a30f6tqw0oh1x0-ats.iot.eu-west-1.amazonaws.com"
+AWS_AUTHORIZER = "candy-iot-authorizer"
 
 class APPLIANCE_TYPE(IntEnum):
     WASHING_MACHINE = 1,

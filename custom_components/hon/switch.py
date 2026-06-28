@@ -18,7 +18,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 
     for appliance in hon.appliances:
 
-        coordinator = await hon.async_get_coordinator(appliance)
+        coordinator = hon.async_get_coordinator(appliance)
 
         for key in coordinator.device.sensors["switch"]:
             default_value = SENSORS_DEFAULT.get(key, {})

@@ -19,8 +19,7 @@ class HonBaseCoordinator(DataUpdateCoordinator):
         super().__init__(
             hass,
             _LOGGER,
-            name="hOn Device",
-            update_interval=timedelta(seconds=30),
+            name="hOn Device"
         )
         self._hon       = hon
         self._device    = None
@@ -39,7 +38,12 @@ class HonBaseCoordinator(DataUpdateCoordinator):
 
 
     async def _async_update_data(self):
-        await self._device.get_context()
+        await self._device.get_status()
+        await self._device.get_programs()
+    #     _LOGGER.info("Remote new context")
+    #     await self._hon.get_context(self._device)
+    #     _LOGGER.info("Stored context")
+    #     _LOGGER.info(self._device._attributes)
 
     @property
     def device(self):

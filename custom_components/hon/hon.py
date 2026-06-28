@@ -6,8 +6,11 @@ import hashlib
 import json
 import time
 from datetime import datetime
+from awsiot import ( mqtt5, mqtt5_client_builder )
+import asyncio
 
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.helpers.event import async_call_later
 
 from .base import HonBaseCoordinator
 from .const import (
@@ -20,7 +23,9 @@ from .const import (
     DEVICE_MODEL,
     APP_VERSION,
     OS,
-    OS_VERSION
+    OS_VERSION,
+    AWS_ENDPOINT,
+    AWS_AUTHORIZER
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,6 +38,8 @@ class HonConnection:
         self._entry = entry
         self._coordinator_dict  = {}
         self._mobile_id = secrets.token_hex(8)
+        self._mqtt = None
+        self._mqtt_connection = None
 
         # Only used during registration (Login/password check)
         if( email != None ) and ( password != None ):
@@ -71,7 +78,7 @@ class HonConnection:
     async def async_close(self):
         await self._session.close()
         
-    async def async_get_coordinator(self, appliance):
+    def async_get_coordinator(self, appliance):
         mac = appliance.get("macAddress", "")
         if mac in self._coordinator_dict:
             return self._coordinator_dict[mac]
@@ -188,7 +195,7 @@ class HonConnection:
             _LOGGER.debug(f"Commands: {result}")
             return result
 
-    async def get_context(self, device):
+    async def get_status(self, device):
         # Create a new hOn session to avoid reaching the expiration
         elapsed_time = time.time() - self._start_time
         if( elapsed_time > SESSION_TIMEOUT ):
@@ -251,3 +258,110 @@ class HonConnection:
                 return True
             _LOGGER.error("hOn command has been rejected. Error message ["+ str(data) + "] sent command ["+ str(command)+ "]")
         return False
+
+    async def get_aws_token(self) -> str:
+        async with self._session.get(f"{API_URL}/auth/v1/introspection", headers=self._headers) as response:
+            if response.status != 200:
+                _LOGGER.error("Unable to get aws token: " + str(response.status))
+                return False
+            token = (await response.json()).get("payload", {})
+            return token.get("tokenSigned", "")
+
+    async def start_mqtt(self):
+        await self.connect_mqtt()
+        self.check_mqtt_connection()
+
+    async def connect_mqtt(self):
+        try:
+            if self._mqtt is None:
+                self._mqtt = mqtt5_client_builder.websockets_with_custom_authorizer(
+                    endpoint=AWS_ENDPOINT,
+                    auth_authorizer_name=AWS_AUTHORIZER,
+                    auth_authorizer_signature=await self.get_aws_token(),
+                    auth_token_key_name="token",
+                    auth_token_value=self._id_token,
+                    client_id=f"pyhOn_{self._mobile_id}",
+                    on_lifecycle_connection_success=self._on_mqtt_connect,
+                    on_lifecycle_connection_failure=self._on_mqtt_disconnect,
+                    on_lifecycle_disconnection=self._on_mqtt_disconnect,
+                    on_publish_received=self._on_mqtt_message,
+                )
+
+            await self._hass.async_add_executor_job(self._mqtt.start)
+            # self._mqtt.start()
+            
+            for appliance in self.appliances:
+                for topic in appliance["topics"]["subscribe"]:
+                    await self._hass.async_add_executor_job(
+                        lambda t=topic: self._mqtt.subscribe(
+                            mqtt5.SubscribePacket([mqtt5.Subscription(t)])
+                        ).result(10)
+                    )
+                    # self._mqtt.subscribe(mqtt5.SubscribePacket([mqtt5.Subscription(topic)])).result(10)
+        except Exception as e:
+            _LOGGER.error("Mqtt connection error %s", str(e))
+            self._mqtt_connection = False
+            self._session.cookie_jar.clear()
+            await self.async_authorize()
+        #     return
+
+        # async_call_later(self._hass, 5, self.check_mqtt_connection)
+
+
+    def _on_mqtt_connect(self, data):
+        _LOGGER.debug("_on_mqtt_connect - %s", str(data))
+        self._mqtt_connection = True
+
+    def _on_mqtt_disconnect(self, data):
+        _LOGGER.debug("_on_mqtt_disconnect - %s", str(data))
+        self._mqtt_connection = False
+
+    def _on_mqtt_message(self, data):
+        _LOGGER.debug("_on_mqtt_message - %s", str(data))
+        if not (data and data.publish_packet and data.publish_packet.payload):
+            return
+        payload = json.loads(data.publish_packet.payload.decode())
+        topic = data.publish_packet.topic
+        _LOGGER.debug("topic - %s", topic)
+        _LOGGER.debug("payload - %s", payload)
+
+        appliance = next(
+            (a for a in self.appliances if topic in a["topics"]["subscribe"]),
+            None,
+        )
+
+        if appliance is None:
+            _LOGGER.warning("appliance not found")
+            return
+
+        coordinator = self.async_get_coordinator(appliance)
+        device = coordinator.device
+        data = {}
+
+        if topic and "appliancestatus" in topic:
+            for parameter in payload["parameters"]:
+                data[parameter["parName"]] = parameter
+        elif topic and "disconnected" in topic:
+            data = {
+                "lastConnEvent": {
+                    "parNewVal": "DISCONNECTED"
+                }
+            }
+        elif topic and "connected" in topic:
+            data = {
+                "lastConnEvent": {
+                    "parNewVal": "CONNECTED"
+                }
+            }
+
+        if data:
+            asyncio.run_coroutine_threadsafe(device.update_data(data), self._hass.loop).result()
+
+    def check_mqtt_connection(self, now=None):
+        _LOGGER.debug("check_mqtt_connection - %s", str(self._mqtt_connection))
+        if self._mqtt_connection is False:
+            _LOGGER.debug("Reconnect mqtt")
+            self._mqtt_connection = None
+            asyncio.run_coroutine_threadsafe(self.connect_mqtt(), self._hass.loop).result()
+            # return
+        async_call_later(self._hass, 20, self.check_mqtt_connection)

@@ -375,11 +375,10 @@ class HonDevice(CoordinatorEntity):
         softener_remaining_time = 20
         if self.get_yaml_config(CONF_SOFTENER_REMAINING_TIME):
             softener_remaining_time = self.get_yaml_config(CONF_SOFTENER_REMAINING_TIME)
-        if self._manually_softener_notify and "machMode" in attributes and int(attributes["machMode"]) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < softener_remaining_time:
+        if self._manually_softener_notify and self.get_data("machMode") != None and int(self.get_data("machMode")) == 2 and "remainingTimeMM" in attributes and int(attributes["remainingTimeMM"]) < softener_remaining_time:
             await self.send_pause_resume()
             await self.send_notify(self._translations.get("component.hon.entity.binary_sensor.notify.state.autosoftener_manually", "autosoftener_manually"))
             self._manually_softener_notify = False
-            return
 
         self.set_data(attributes)
 

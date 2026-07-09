@@ -6,7 +6,7 @@ import hashlib
 import json
 import time
 from datetime import datetime
-from awsiot import ( mqtt5, mqtt5_client_builder )
+from awsiot import (mqtt5, mqtt5_client_builder)
 import asyncio
 
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
@@ -30,19 +30,20 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-SESSION_TIMEOUT = 21600 # 6 hours session
+SESSION_TIMEOUT = 21600  # 6 hours session
+
 
 class HonConnection:
-    def __init__(self, hass, entry, email = None, password = None) -> None:
+    def __init__(self, hass, entry, email=None, password=None) -> None:
         self._hass = hass
         self._entry = entry
-        self._coordinator_dict  = {}
+        self._coordinator_dict = {}
         self._mobile_id = secrets.token_hex(8)
         self._mqtt = None
         self._mqtt_connection = None
 
         # Only used during registration (Login/password check)
-        if( email != None ) and ( password != None ):
+        if (email != None) and (password != None):
             self._email = email
             self._password = password
             self._framework = "None"
@@ -55,7 +56,7 @@ class HonConnection:
             self._cognitoToken = entry.data.get(CONF_COGNITO_TOKEN, "")
 
         self._frontdoor_url = ""
-        self._start_time    = time.time()
+        self._start_time = time.time()
 
         self._header = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
@@ -77,12 +78,12 @@ class HonConnection:
 
     async def async_close(self):
         await self._session.close()
-        
+
     def async_get_coordinator(self, appliance):
         mac = appliance.get("macAddress", "")
         if mac in self._coordinator_dict:
             return self._coordinator_dict[mac]
-        coordinator = HonBaseCoordinator( self._hass, self, appliance)
+        coordinator = HonBaseCoordinator(self._hass, self, appliance)
         self._coordinator_dict[mac] = coordinator
         return coordinator
 
@@ -198,8 +199,7 @@ class HonConnection:
     async def get_status(self, device):
         # Create a new hOn session to avoid reaching the expiration
         elapsed_time = time.time() - self._start_time
-        if( elapsed_time > SESSION_TIMEOUT ):
-            self._session.cookie_jar.clear()
+        if (elapsed_time > SESSION_TIMEOUT):
             await self.async_authorize()
 
         params = {
@@ -213,27 +213,26 @@ class HonConnection:
             _LOGGER.debug(f"Context for mac[{device._mac_address}] type [{device._type_name}] {data}")
             return data.get("payload", {})
 
-
-    async def send_command(self, device, command, parameters, program_name = False):
+    async def send_command(self, device, command, parameters, program_name=False):
         now = datetime.utcnow().isoformat()
         args = {
-           "macAddress": device._mac_address,
-           "attributes": {
-               "channel": "mobileApp",
-               "origin": "standardProgram"
-           },
-           "device": {
-               "mobileOs": OS,
-               "osVersion": OS_VERSION,
-               "appVersion": APP_VERSION,
-               "deviceModel": DEVICE_MODEL,
-               "mobileId": self._mobile_id
-           },
-           "ancillaryParameters": {},
-           "applianceOptions": {},
-           "transactionId": f"{device._mac_address}_{now[:-3]}Z",
-           "commandName": command,
-           "parameters": parameters
+            "macAddress": device._mac_address,
+            "attributes": {
+                "channel": "mobileApp",
+                "origin": "standardProgram"
+            },
+            "device": {
+                "mobileOs": OS,
+                "osVersion": OS_VERSION,
+                "appVersion": APP_VERSION,
+                "deviceModel": DEVICE_MODEL,
+                "mobileId": self._mobile_id
+            },
+            "ancillaryParameters": {},
+            "applianceOptions": {},
+            "transactionId": f"{device._mac_address}_{now[:-3]}Z",
+            "commandName": command,
+            "parameters": parameters
         }
 
         if program_name:
@@ -247,16 +246,16 @@ class HonConnection:
         _LOGGER.debug("Send command")
         _LOGGER.debug(args)
 
-        async with self._session.post(f"{API_URL}/commands/v1/send",headers=self._headers,json=args,) as resp:
+        async with self._session.post(f"{API_URL}/commands/v1/send", headers=self._headers, json=args, ) as resp:
             try:
                 data = await resp.json()
                 _LOGGER.debug((f"Command result (send_command): {data}"))
             except json.JSONDecodeError:
-                _LOGGER.error("hOn Invalid Data ["+ str(resp.text()) + "] after sending command ["+ str(command)+ "]")
+                _LOGGER.error("hOn Invalid Data [" + str(resp.text()) + "] after sending command [" + str(command) + "]")
                 return False
             if data["payload"]["resultCode"] == "0":
                 return True
-            _LOGGER.error("hOn command has been rejected. Error message ["+ str(data) + "] sent command ["+ str(command)+ "]")
+            _LOGGER.error("hOn command has been rejected. Error message [" + str(data) + "] sent command [" + str(command) + "]")
         return False
 
     async def get_aws_token(self) -> str:
@@ -273,23 +272,22 @@ class HonConnection:
 
     async def connect_mqtt(self):
         try:
-            if self._mqtt is None:
-                self._mqtt = mqtt5_client_builder.websockets_with_custom_authorizer(
-                    endpoint=AWS_ENDPOINT,
-                    auth_authorizer_name=AWS_AUTHORIZER,
-                    auth_authorizer_signature=await self.get_aws_token(),
-                    auth_token_key_name="token",
-                    auth_token_value=self._id_token,
-                    client_id=f"pyhOn_{self._mobile_id}",
-                    on_lifecycle_connection_success=self._on_mqtt_connect,
-                    on_lifecycle_connection_failure=self._on_mqtt_disconnect,
-                    on_lifecycle_disconnection=self._on_mqtt_disconnect,
-                    on_publish_received=self._on_mqtt_message,
-                )
+            self._mqtt = mqtt5_client_builder.websockets_with_custom_authorizer(
+                endpoint=AWS_ENDPOINT,
+                auth_authorizer_name=AWS_AUTHORIZER,
+                auth_authorizer_signature=await self.get_aws_token(),
+                auth_token_key_name="token",
+                auth_token_value=self._id_token,
+                client_id=f"pyhOn_{self._mobile_id}",
+                on_lifecycle_connection_success=self._on_mqtt_connect,
+                on_lifecycle_connection_failure=self._on_mqtt_disconnect,
+                on_lifecycle_disconnection=self._on_mqtt_disconnect,
+                on_publish_received=self._on_mqtt_message,
+            )
 
             await self._hass.async_add_executor_job(self._mqtt.start)
             # self._mqtt.start()
-            
+
             for appliance in self.appliances:
                 for topic in appliance["topics"]["subscribe"]:
                     await self._hass.async_add_executor_job(
@@ -301,12 +299,10 @@ class HonConnection:
         except Exception as e:
             _LOGGER.error("Mqtt connection error %s", str(e))
             self._mqtt_connection = False
-            self._session.cookie_jar.clear()
             await self.async_authorize()
         #     return
 
         # async_call_later(self._hass, 5, self.check_mqtt_connection)
-
 
     def _on_mqtt_connect(self, data):
         _LOGGER.debug("_on_mqtt_connect - %s", str(data))
